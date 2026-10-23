@@ -74,6 +74,11 @@ export function TvPlayer({ quiz, onExit }: TvPlayerProps) {
   // Audio configuration modal
   const [isAudioModalOpen, setIsAudioModalOpen] = useState(false);
 
+  // Motion Transitions & Studio Lighting (Plano 5)
+  const [navDirection, setNavDirection] = useState<'next' | 'prev'>('next');
+  const [isTransitioning, setIsTransitioning] = useState(false);
+  const [showRevealFlash, setShowRevealFlash] = useState(false);
+
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const currentQuestion = questions[currentIndex];
   const totalQuestions = questions.length;
@@ -248,11 +253,14 @@ export function TvPlayer({ quiz, onExit }: TvPlayerProps) {
     };
   }, [currentIndex, activeEffect, isEntranceFinished, isCompleted, questions.length, currentQuestion, quiz.soundEffects]);
 
-  // Reveal answer with animation and celebration
+  // Reveal answer with animation, studio flash and celebration
   const handleReveal = useCallback((isTimeUp = false) => {
     setIsRevealed((prev) => {
       if (prev) return prev; // already revealed
-      // Mantém o áudio/efeito de tensão de fundo tocando em loop contínuo sem pausas
+      
+      // Trigger cinematic studio reveal flash (Plano 5)
+      setShowRevealFlash(true);
+      setTimeout(() => setShowRevealFlash(false), 450);
 
       if (quiz.soundEffects) {
         if (isTimeUp) {
@@ -310,9 +318,12 @@ export function TvPlayer({ quiz, onExit }: TvPlayerProps) {
     };
   }, [isEntranceFinished, isPaused, isRevealed, isCompleted, warningTime, quiz, handleReveal]);
 
-  // Next Question
-  const handleNext = () => {
+  // Next Question with Broadcast TV Transition (Plano 5)
+  const handleNext = useCallback(() => {
     if (currentIndex < totalQuestions - 1) {
+      setNavDirection('next');
+      setIsTransitioning(true);
+      setTimeout(() => setIsTransitioning(false), 420);
       setCurrentIndex(prev => prev + 1);
     } else {
       setIsCompleted(true);
@@ -322,14 +333,17 @@ export function TvPlayer({ quiz, onExit }: TvPlayerProps) {
         triggerConfetti();
       }
     }
-  };
+  }, [currentIndex, totalQuestions, quiz.soundEffects, triggerConfetti]);
 
-  // Previous Question
-  const handlePrev = () => {
+  // Previous Question with Broadcast TV Transition (Plano 5)
+  const handlePrev = useCallback(() => {
     if (currentIndex > 0) {
+      setNavDirection('prev');
+      setIsTransitioning(true);
+      setTimeout(() => setIsTransitioning(false), 420);
       setCurrentIndex(prev => prev - 1);
     }
-  };
+  }, [currentIndex]);
 
   // Restart Quiz
   const handleRestart = () => {
@@ -521,6 +535,23 @@ export function TvPlayer({ quiz, onExit }: TvPlayerProps) {
       {/* Top Electric Cyan Accent Line matching attached reference image */}
       <div className="absolute top-0 left-0 right-0 h-1 z-50 bg-gradient-to-r from-[#00E5FF] via-cyan-300 to-[#00E5FF] shadow-[0_0_16px_rgba(0,229,255,0.9)]" />
 
+      {/* STUDIO BACKGROUND SEARCHLIGHT BEAMS (Broadcast Depth & Atmosphere) */}
+      <div className="pointer-events-none absolute -top-40 -left-40 w-[450px] h-[850px] bg-gradient-to-br from-cyan-400/10 via-indigo-600/5 to-transparent blur-3xl anim-studio-beam-left z-0" />
+      <div className="pointer-events-none absolute -top-40 -right-40 w-[450px] h-[850px] bg-gradient-to-bl from-blue-500/10 via-purple-600/5 to-transparent blur-3xl anim-studio-beam-right z-0" />
+      <div className="pointer-events-none absolute bottom-0 left-0 right-0 h-36 bg-gradient-to-t from-cyan-500/5 to-transparent z-0" />
+
+      {/* REVEAL CINEMATIC FLASH BURST (Plano 5) */}
+      {showRevealFlash && (
+        <div className="pointer-events-none fixed inset-0 z-50 bg-gradient-to-b from-white/45 via-cyan-200/35 to-transparent anim-reveal-flash" />
+      )}
+
+      {/* TV WIPE STREAK OVERLAY (Plano 5) */}
+      {isTransitioning && (
+        <div className="pointer-events-none fixed inset-0 z-50 overflow-hidden">
+          <div className="w-full h-full bg-gradient-to-r from-transparent via-[#00E5FF]/30 to-transparent anim-tv-wipe" />
+        </div>
+      )}
+
       {/* TOP TIME BAR: drains smoothly from 15s to 0s; turns amber/red with shimmer in last 10s */}
       {!showIntro && (
         <div className="absolute top-1 left-0 right-0 h-1.5 z-40 bg-slate-900/80 overflow-hidden">
@@ -570,177 +601,207 @@ export function TvPlayer({ quiz, onExit }: TvPlayerProps) {
 
       {/* TOP HEADER */}
       <header
-        className="relative z-20 px-4 sm:px-6 md:px-8 lg:px-12 py-2.5 border-b border-cyan-500/30 bg-[#06142e]/95 backdrop-blur-md shrink-0 shadow-lg"
+        className="relative z-20 px-3 sm:px-6 md:px-8 lg:px-12 py-2 border-b border-cyan-500/30 bg-[#06142e]/95 backdrop-blur-md shrink-0 shadow-lg"
       >
-        <div className="w-full max-w-[1850px] mx-auto flex items-center justify-between">
-        <div className="flex items-center gap-3 sm:gap-4">
-          {/* Show do Milhão TV Logo (Cropped & Large) */}
-          <img
-            src="/show_milhao-cropped.png"
-            alt="Show do Milhão"
-            className="h-11 sm:h-13 md:h-15 w-auto object-contain drop-shadow-[0_4px_16px_rgba(255,215,0,0.4)] transition-transform hover:scale-105"
-            onError={(e) => {
-              (e.target as HTMLImageElement).src = "/show_milhao.png";
-            }}
-          />
-
-          {/* Quiz Title & Category */}
-          <div className="hidden sm:flex flex-col justify-center">
-            <span className="font-black text-sm md:text-base text-white tracking-tight truncate max-w-xs md:max-w-md drop-shadow">
-              {quiz.title}
-            </span>
-            {quiz.category && (
-              <span className="text-[10px] md:text-xs font-bold text-[#00E5FF] uppercase tracking-wider drop-shadow-[0_0_8px_rgba(0,229,255,0.6)]">
-                {quiz.category}
-              </span>
-            )}
-          </div>
-        </div>
-
-        <div className="flex items-center gap-2 sm:gap-3">
-          {/* Institutional Favoo Logo in Header (Crisp and Well-sized) */}
-          <div className="hidden md:flex items-center px-2.5 py-1 rounded-xl bg-white/95 border border-cyan-400/40 shadow-sm">
+        <div className="w-full max-w-[1850px] mx-auto flex items-center justify-between gap-3 sm:gap-6">
+          
+          {/* LEFT: Show do Milhão TV Logo & Quiz Info */}
+          <div className="flex items-center gap-3 sm:gap-4 shrink-0">
             <img
-              src="/logo-cropped.png"
-              alt="Favoo"
-              className="h-6 sm:h-7 w-auto object-contain"
+              src="/show_milhao-cropped.png"
+              alt="Show do Milhão"
+              className="h-11 sm:h-13 md:h-15 w-auto object-contain drop-shadow-[0_4px_16px_rgba(255,215,0,0.4)] transition-transform hover:scale-105"
               onError={(e) => {
-                (e.target as HTMLImageElement).src = "/logo.png";
+                (e.target as HTMLImageElement).src = "/show_milhao.png";
               }}
             />
+
+            <div className="hidden sm:flex flex-col justify-center">
+              <span className="font-black text-sm md:text-base text-white tracking-tight truncate max-w-xs md:max-w-md drop-shadow">
+                {quiz.title}
+              </span>
+              {quiz.category && (
+                <span className="text-[10px] md:text-xs font-bold text-[#00E5FF] uppercase tracking-wider drop-shadow-[0_0_8px_rgba(0,229,255,0.6)]">
+                  {quiz.category}
+                </span>
+              )}
+            </div>
           </div>
 
-          {/* Question Index Badge */}
-          <div className="px-3 py-1 rounded-xl border border-cyan-400/40 bg-cyan-950/60 text-xs font-black text-[#00E5FF] flex items-center gap-1.5 shadow-[0_0_10px_rgba(0,229,255,0.2)]">
-            <BookOpen className="h-3.5 w-3.5 text-[#00E5FF]" />
-            <span>{currentIndex + 1} / {totalQuestions}</span>
-          </div>
-
-          {/* Live Countdown Progress Ring */}
-          <div className="flex items-center gap-2">
-            {isPaused && (
-              <span className="text-[11px] sm:text-xs font-black px-2.5 py-0.5 rounded-lg bg-amber-500 text-slate-950 shadow-md">
-                PAUSADO
-              </span>
-            )}
-            {isRevealed && (
-              <span className="text-[11px] sm:text-xs font-black px-2.5 py-0.5 rounded-lg bg-emerald-500 text-slate-950 shadow-md flex items-center gap-1 animate-in zoom-in-75 duration-200">
-                <Sparkles className="h-3 w-3 text-slate-950" /> Revelada
-              </span>
-            )}
-
+          {/* CENTER: HERO BROADCAST CRONÔMETRO (PLANO 2) - COMMANDING & ULTRA VISIBLE */}
+          <div className="flex-1 flex items-center justify-center min-w-0">
             <div
-              className={`flex items-center gap-2 px-3 py-1 rounded-xl font-black border transition-all text-xs shadow-md ${
+              className={`relative flex items-center gap-2.5 sm:gap-4 px-3.5 sm:px-6 py-1 sm:py-1.5 rounded-2xl md:rounded-full border-2 transition-all duration-300 shadow-2xl ${
                 isRevealed
-                  ? 'bg-emerald-950/80 border-emerald-500 text-emerald-300'
+                  ? 'bg-emerald-950/90 border-emerald-400 text-emerald-300 shadow-[0_0_30px_rgba(16,185,129,0.5)] ring-2 ring-emerald-400/40'
+                  : isPaused
+                  ? 'bg-[#291e06]/95 border-amber-400 text-amber-300 shadow-[0_0_20px_rgba(245,158,11,0.4)]'
                   : timeLeft <= 3
-                  ? 'bg-red-600 text-white border-red-400 shadow-[0_0_20px_rgba(239,68,68,0.8)] ring-2 ring-red-400/60 animate-pulse'
+                  ? 'bg-red-950/95 border-red-500 text-white anim-timer-red shadow-[0_0_40px_rgba(239,68,68,0.9)] ring-4 ring-red-500/60'
                   : isUrgent
-                  ? 'bg-amber-500 text-slate-950 border-amber-300 shadow-[0_0_15px_rgba(245,158,11,0.7)] animate-pulse'
-                  : 'bg-cyan-950/80 border-cyan-400/60 text-[#00E5FF] shadow-[0_0_12px_rgba(0,229,255,0.3)]'
+                  ? 'bg-[#2b1605]/95 border-amber-400 text-amber-300 anim-timer-amber shadow-[0_0_35px_rgba(245,158,11,0.8)] ring-2 ring-amber-400/50'
+                  : 'bg-[#061e3d]/90 border-cyan-400/80 text-[#00E5FF] anim-timer-cyan shadow-[0_0_25px_rgba(0,229,255,0.35)] ring-1 ring-cyan-300/30'
               }`}
             >
-              {/* SVG Radial Ring */}
-              <div className="relative w-5 h-5 sm:w-6 sm:h-6 flex items-center justify-center shrink-0">
-                <svg className="w-5 h-5 sm:w-6 sm:h-6 -rotate-90 transform" viewBox="0 0 28 28">
+              {/* Radial Countdown Gauge */}
+              <div className="relative w-9 h-9 sm:w-11 sm:h-11 md:w-12 md:h-12 flex items-center justify-center shrink-0">
+                <svg className="w-full h-full -rotate-90 transform" viewBox="0 0 36 36">
+                  {/* Background track */}
                   <circle
-                    cx="14"
-                    cy="14"
-                    r="10.5"
+                    cx="18"
+                    cy="18"
+                    r="14"
                     stroke="currentColor"
-                    strokeWidth="2.5"
+                    strokeWidth="3.2"
                     fill="transparent"
-                    className="opacity-25"
+                    className="opacity-20"
                   />
+                  {/* Active progress track */}
                   <circle
-                    cx="14"
-                    cy="14"
-                    r="10.5"
+                    cx="18"
+                    cy="18"
+                    r="14"
                     stroke="currentColor"
-                    strokeWidth="2.5"
-                    strokeDasharray={2 * Math.PI * 10.5}
+                    strokeWidth="3.2"
+                    strokeDasharray={2 * Math.PI * 14}
                     strokeDashoffset={
-                      2 * Math.PI * 10.5 * (1 - Math.max(0, Math.min(1, timeLeft / questionDuration)))
+                      2 * Math.PI * 14 * (1 - Math.max(0, Math.min(1, timeLeft / questionDuration)))
                     }
                     strokeLinecap="round"
                     fill="transparent"
                     className="transition-all duration-1000 ease-linear"
                   />
                 </svg>
-                <Clock className={`absolute h-2.5 w-2.5 ${timeLeft <= 3 && !isRevealed ? 'animate-pulse' : ''}`} />
+                <Clock className={`absolute h-4 w-4 sm:h-5 sm:w-5 ${timeLeft <= 3 && !isRevealed ? 'animate-pulse text-white' : ''}`} />
               </div>
 
-              {/* Pop / Pulse Number on Tick */}
-              <span
-                key={timeLeft}
-                className={`text-xs sm:text-sm font-black font-mono tracking-tight ${
-                  timeLeft <= 10 && !isRevealed
-                    ? 'inline-block animate-in zoom-in-125 duration-200'
-                    : ''
-                }`}
-              >
-                {timeLeft}s
-              </span>
+              {/* Big Digits Display */}
+              <div className="flex flex-col items-center sm:items-start justify-center leading-none">
+                <div className="flex items-baseline gap-1">
+                  <span
+                    key={timeLeft}
+                    className={`font-mono font-black tabular-nums tracking-tight drop-shadow-[0_2px_12px_rgba(0,0,0,0.8)] ${
+                      timeLeft <= 3 && !isRevealed
+                        ? 'text-3xl sm:text-4xl md:text-5xl text-white inline-block animate-in zoom-in-125 duration-200'
+                        : isUrgent && !isRevealed
+                        ? 'text-3xl sm:text-4xl md:text-5xl text-amber-300 inline-block animate-in zoom-in-110 duration-200'
+                        : 'text-2xl sm:text-3xl md:text-4xl text-[#00E5FF]'
+                    }`}
+                  >
+                    {String(timeLeft).padStart(2, '0')}
+                  </span>
+                  <span className="text-xs sm:text-sm font-black uppercase text-current/70">
+                    s
+                  </span>
+                </div>
+              </div>
+
+              {/* Stage Tension Status Label */}
+              <div className="hidden md:flex flex-col justify-center pl-1 sm:pl-2 border-l border-current/25 leading-tight">
+                <span className="text-[10px] sm:text-xs font-black uppercase tracking-wider text-current drop-shadow">
+                  {isRevealed
+                    ? '✨ RESPOSTA REVELADA'
+                    : isPaused
+                    ? '⏸️ CRONÔMETRO PAUSADO'
+                    : timeLeft <= 3
+                    ? '🚨 ÚLTIMOS SEGUNDOS!'
+                    : isUrgent
+                    ? '⚡ CONTAGEM FINAL'
+                    : '⏱️ CRONÔMETRO DA TV'}
+                </span>
+                <span className="text-[9px] sm:text-[10px] font-bold opacity-75">
+                  {isRevealed
+                    ? 'Pressione Próxima (N / Enter)'
+                    : isPaused
+                    ? 'Pressione Espaço p/ Retomar'
+                    : `Tempo Limite: ${questionDuration}s`}
+                </span>
+              </div>
             </div>
           </div>
 
-          {/* Action buttons (Font Size, Sound, Fullscreen, Exit) */}
-          <div className="flex items-center gap-1.5 pl-1 border-l border-cyan-500/30">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setIsLargeFont(prev => !prev)}
-              className="h-8 px-2 text-xs gap-1 bg-slate-900 border-cyan-500/40 text-cyan-200 hover:text-white hover:bg-slate-800"
-              title="Alternar tamanho da fonte para a TV"
-            >
-              <Type className="h-3.5 w-3.5 text-[#00E5FF]" />
-              <span>{isLargeFont ? 'A+' : 'A'}</span>
-            </Button>
+          {/* RIGHT: Institutional Logo, Question Index & Actions */}
+          <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+            {/* Favoo Institutional Logo */}
+            <div className="hidden lg:flex items-center px-2.5 py-1 rounded-xl bg-white/95 border border-cyan-400/40 shadow-sm">
+              <img
+                src="/logo-cropped.png"
+                alt="Favoo"
+                className="h-6 sm:h-7 w-auto object-contain"
+                onError={(e) => {
+                  (e.target as HTMLImageElement).src = "/logo.png";
+                }}
+              />
+            </div>
 
-            <Button
-              variant="outline"
-              size="icon"
-              className="h-8 w-8 rounded-lg border border-cyan-500/40 bg-slate-900 text-cyan-200 hover:text-white hover:bg-slate-800"
-              onClick={handleToggleMute}
-              title={isMuted ? "Ativar Áudio" : "Silenciar Áudio"}
-            >
-              {isMuted ? <VolumeX className="h-4 w-4 text-destructive" /> : <Volume2 className="h-4 w-4 text-[#00E5FF]" />}
-            </Button>
+            {/* Question Index Badge */}
+            <div className="px-2.5 sm:px-3 py-1 rounded-xl border border-cyan-400/40 bg-cyan-950/60 text-xs font-black text-[#00E5FF] flex items-center gap-1.5 shadow-[0_0_10px_rgba(0,229,255,0.2)]">
+              <BookOpen className="h-3.5 w-3.5 text-[#00E5FF]" />
+              <span>{currentIndex + 1} / {totalQuestions}</span>
+            </div>
 
-            <Button
-              variant="outline"
-              size="icon"
-              className="h-8 w-8 rounded-lg border border-cyan-500/40 bg-slate-900 text-cyan-200 hover:text-white hover:bg-slate-800"
-              onClick={toggleFullscreen}
-              title="Tela Cheia (F)"
-            >
-              {isFullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4 text-[#00E5FF]" />}
-            </Button>
+            {/* Action buttons (Font Size, Sound, Fullscreen, Exit) */}
+            <div className="flex items-center gap-1.5 pl-1 border-l border-cyan-500/30">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setIsLargeFont(prev => !prev)}
+                className="h-8 px-2 text-xs gap-1 bg-slate-900 border-cyan-500/40 text-cyan-200 hover:text-white hover:bg-slate-800"
+                title="Alternar tamanho da fonte para a TV"
+              >
+                <Type className="h-3.5 w-3.5 text-[#00E5FF]" />
+                <span>{isLargeFont ? 'A+' : 'A'}</span>
+              </Button>
 
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8 rounded-lg text-slate-400 hover:text-destructive hover:bg-destructive/10"
-              onClick={onExit}
-              title="Sair do Modo TV"
-            >
-              <X className="h-4 w-4" />
-            </Button>
+              <Button
+                variant="outline"
+                size="icon"
+                className="h-8 w-8 rounded-lg border border-cyan-500/40 bg-slate-900 text-cyan-200 hover:text-white hover:bg-slate-800"
+                onClick={handleToggleMute}
+                title={isMuted ? "Ativar Áudio" : "Silenciar Áudio"}
+              >
+                {isMuted ? <VolumeX className="h-4 w-4 text-destructive" /> : <Volume2 className="h-4 w-4 text-[#00E5FF]" />}
+              </Button>
+
+              <Button
+                variant="outline"
+                size="icon"
+                className="h-8 w-8 rounded-lg border border-cyan-500/40 bg-slate-900 text-cyan-200 hover:text-white hover:bg-slate-800"
+                onClick={toggleFullscreen}
+                title="Tela Cheia (F)"
+              >
+                {isFullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4 text-[#00E5FF]" />}
+              </Button>
+
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 rounded-lg text-slate-400 hover:text-destructive hover:bg-destructive/10"
+                onClick={onExit}
+                title="Sair do Modo TV"
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
           </div>
-        </div>
         </div>
       </header>
 
-      {/* CENTER STAGE: EXACT MATCH TO USER MOCKUPS WITH LATERAL RESPONSIVENESS */}
+      {/* CENTER STAGE: EXACT MATCH TO USER MOCKUPS WITH DIRECTIONAL TRANSITION (PLANO 5) */}
       <main className="relative z-10 flex-1 min-h-0 px-4 sm:px-6 md:px-8 lg:px-12 xl:px-14 py-2 sm:py-3 w-full max-w-[1850px] mx-auto flex flex-col justify-center overflow-hidden">
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 lg:gap-7 xl:gap-9 items-stretch w-full max-h-full min-h-0">
+        <div
+          key={currentIndex}
+          className={`grid grid-cols-1 lg:grid-cols-12 gap-5 lg:gap-7 xl:gap-9 items-stretch w-full max-h-full min-h-0 ${
+            navDirection === 'next' ? 'anim-question-next' : 'anim-question-prev'
+          }`}
+        >
           
           {/* LEFT COLUMN: LARGE ROUNDED STATEMENT CARD (SHOW DO MILHÃO THEME) */}
           <div className={`${
             currentQuestion.imageUrl
               ? 'lg:col-span-6 xl:col-span-7 2xl:col-span-7'
               : 'lg:col-span-7 xl:col-span-8 2xl:col-span-8'
-          } flex flex-col min-h-0 h-full transition-all duration-600 ease-out ${
+          } flex flex-col min-h-0 h-full transition-all duration-500 ease-out ${
             activeEffect === 'step_by_step'
               ? (entranceStep >= 0 ? 'opacity-100 translate-x-0' : 'opacity-0 -translate-x-16')
               : 'opacity-100 translate-x-0'
@@ -815,7 +876,7 @@ export function TvPlayer({ quiz, onExit }: TvPlayerProps) {
                 const badgeStyle = getBadgeStyle(alt);
 
                 // Entrance animation styles
-                let entranceAnimClasses = "transition-all duration-500 ease-out";
+                let entranceAnimClasses = "transition-all duration-300 ease-out";
                 if (activeEffect === 'delay') {
                   if (!isEntranceFinished && entranceStep < 1) {
                     entranceAnimClasses += " opacity-0 translate-y-6 pointer-events-none";
@@ -837,8 +898,18 @@ export function TvPlayer({ quiz, onExit }: TvPlayerProps) {
                 return (
                   <div
                     key={alt.letter}
-                    className={`flex items-center px-4 py-2.5 sm:px-5 sm:py-3 rounded-full md:rounded-2xl transition-all duration-200 text-left ${cardStyles} ${entranceAnimClasses}`}
+                    style={{
+                      animationDelay: `${altIdx * 70}ms`,
+                    }}
+                    className={`relative overflow-hidden flex items-center px-4 py-2.5 sm:px-5 sm:py-3 rounded-full md:rounded-2xl transition-all duration-300 text-left ${cardStyles} ${entranceAnimClasses} ${
+                      isRevealed && alt.isCorrect ? 'anim-winner-glow ring-4 ring-emerald-300/80 shadow-[0_0_35px_rgba(16,185,129,0.8)]' : ''
+                    }`}
                   >
+                    {/* Subtle Sheen Glint on unrevealed alternatives */}
+                    {!isRevealed && (
+                      <div className="pointer-events-none absolute inset-0 w-1/2 h-full bg-gradient-to-r from-transparent via-white/10 to-transparent anim-card-glint" />
+                    )}
+
                     {/* Letter badge: circular badge with electric cyan styling */}
                     <div
                       className={`w-8 h-8 sm:w-9 sm:h-9 rounded-full flex items-center justify-center font-black text-xs sm:text-sm shrink-0 mr-3 shadow-md ${badgeStyle}`}
