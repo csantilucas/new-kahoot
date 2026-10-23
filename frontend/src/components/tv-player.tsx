@@ -182,16 +182,27 @@ export function TvPlayer({ quiz, onExit }: TvPlayerProps) {
     setEntranceStep(0);
     hasTriggeredFinalCountdownRef.current = false;
 
-    // Interrompe qualquer efeito sonoro da questão anterior (ex: contagem regressiva)
-    soundManager.stopYoutubeAudio('sfx');
+    // Interrompe qualquer efeito sonoro da questão anterior (ex: vinheta de resposta certa)
+    soundManager.stopSfx();
 
-    // Restaura o volume normal da música de fundo para a nova pergunta
-    soundManager.restoreBackgroundMusic();
+    // Restaura o volume normal e retoma a música de fundo para a nova pergunta
+    soundManager.resumeBackgroundMusic();
 
     if (!skipMusic && quiz.bgMusic && quiz.bgMusic !== 'none') {
       soundManager.startBackgroundMusic(quiz.bgMusic, quiz.customMusicUrl || undefined);
     }
   }, [quiz, questionDuration]);
+
+  // Pausar/retomar áudio quando o apresentador pausar ou despausar a questão
+  useEffect(() => {
+    if (isRevealed || isCompleted || showIntro) return;
+    if (isPaused) {
+      soundManager.pauseBackgroundMusic();
+      soundManager.stopSfx();
+    } else if (isEntranceFinished) {
+      soundManager.resumeBackgroundMusic();
+    }
+  }, [isPaused, isRevealed, isCompleted, isEntranceFinished, showIntro]);
 
   // Load question
   useEffect(() => {
@@ -204,8 +215,9 @@ export function TvPlayer({ quiz, onExit }: TvPlayerProps) {
     };
   }, [currentIndex, questions.length, resetQuestionState]);
 
-  // Parar TODAS as trilhas sonoras, vídeos e timers ao sair da TV (desmontagem do componente)
+  // Pré-carregar áudios locais do Show do Milhão e parar ao desmontar
   useEffect(() => {
+    soundManager.preloadCommonAudios();
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
       soundManager.stopAllAudio();
@@ -276,6 +288,10 @@ export function TvPlayer({ quiz, onExit }: TvPlayerProps) {
     if (isRevealedRef.current) return;
     isRevealedRef.current = true;
     setIsRevealed(true);
+
+    // Pausar os áudios de fundo e contagem/ticking imediatamente para dar destaque total à resposta certa
+    soundManager.stopSfx();
+    soundManager.pauseBackgroundMusic();
 
     // Trigger cinematic studio reveal flash (Plano 5)
     setShowRevealFlash(true);

@@ -25,9 +25,26 @@ export interface CustomAudioConfig {
 const STORAGE_KEY = 'revisao_custom_audios';
 export const YOUTUBE_AUDIO_EVENT = 'revisao:youtube-audio';
 
+// Presets oficiais do Show do Milhão mapeados para arquivos MP3 locais de altíssima fidelidade e ZERO LATÊNCIA (0ms)
+export const KNOWN_AUDIO_PRESETS: Record<string, string> = {
+  // Silvio Santos - Certa Resposta!
+  'HvPajEdundA': '/sounds/certa-resposta.mp3',
+  // Silvio Santos - 10 Segundos!
+  'saFHtWkxNMw': '/sounds/10-segundos.mp3',
+  // Show do Milhão - Trilha Seleção de Perguntas / Tempo Esgotado / Confete
+  'nfLftXz_37g': '/sounds/tempo-esgotado.mp3',
+  // Show do Milhão - Tema de Abertura (Completo)
+  'wbFxNbLWaRo': '/sounds/abertura.mp3',
+};
+
 export function getYoutubeVideoId(value: string): string | null {
+  if (!value || typeof value !== 'string') return null;
+  const trimmed = value.trim();
+  if (/^[A-Za-z0-9_-]{11}$/.test(trimmed)) {
+    return trimmed;
+  }
   try {
-    const url = new URL(value);
+    const url = new URL(trimmed);
     if (url.protocol !== 'https:' && url.protocol !== 'http:') return null;
     const hostname = url.hostname.toLowerCase().replace(/^www\./, '');
     let videoId: string | null = null;
@@ -74,16 +91,53 @@ class SoundManager {
   private currentTrack: string | null = null;
   private currentCustomUrl: string | null = null;
   private customAudio: HTMLAudioElement | null = null;
+  private currentSfxAudio: HTMLAudioElement | null = null;
   private previewAudioEl: HTMLAudioElement | null = null;
   private previewingYoutube = false;
   private isYoutubeBgActive: boolean = false;
   private isYoutubeSfxActive: boolean = false;
   private config: CustomAudioConfig | null = null;
+  private audioCache: Map<string, HTMLAudioElement> = new Map();
 
   constructor() {
     if (typeof window !== 'undefined') {
       this.loadConfig();
+      this.preloadCommonAudios();
     }
+  }
+
+  public preloadCommonAudios() {
+    if (typeof window === 'undefined') return;
+    const common = [
+      '/sounds/certa-resposta.mp3',
+      '/sounds/10-segundos.mp3',
+      '/sounds/tempo-esgotado.mp3',
+      '/sounds/abertura.mp3',
+    ];
+    common.forEach((src) => {
+      try {
+        if (!this.audioCache.has(src)) {
+          const audio = new Audio();
+          audio.preload = 'auto';
+          audio.src = src;
+          audio.load();
+          this.audioCache.set(src, audio);
+        }
+      } catch {}
+    });
+  }
+
+  public resolveUrl(url?: string | null): string | null {
+    if (!url) return null;
+    const trimmed = url.trim();
+    if (KNOWN_AUDIO_PRESETS[trimmed]) {
+      return KNOWN_AUDIO_PRESETS[trimmed];
+    }
+    const ytid = getYoutubeVideoId(trimmed);
+    if (ytid && KNOWN_AUDIO_PRESETS[ytid]) {
+      return KNOWN_AUDIO_PRESETS[ytid];
+    }
+    return trimmed;
   }
 
   // --- CUSTOM AUDIO CONFIGURATION & PERSISTENCE ---
@@ -188,7 +242,8 @@ class SoundManager {
 
   public previewAudio(url: string, onEnded?: () => void) {
     this.stopPreview();
-    const youtubeVideoId = getYoutubeVideoId(url);
+    const resolved = this.resolveUrl(url) || url;
+    const youtubeVideoId = getYoutubeVideoId(resolved);
     if (youtubeVideoId) {
       this.previewingYoutube = true;
       this.isYoutubeSfxActive = true;
@@ -202,7 +257,7 @@ class SoundManager {
     }
 
     try {
-      this.previewAudioEl = new Audio(url);
+      this.previewAudioEl = new Audio(resolved);
       this.previewAudioEl.volume = this.sfxVolume;
       this.previewAudioEl.play().catch(e => console.warn('Preview blocked:', e));
       this.previewAudioEl.onended = () => {
@@ -266,6 +321,10 @@ class SoundManager {
     }
   }
 
+  public pauseBackgroundMusic() {
+    this.zeroBackgroundMusic();
+  }
+
   public restoreBackgroundMusic() {
     this.isBgZeroed = false;
     const effectiveVol = this.isMuted ? 0 : this.bgVolume;
@@ -280,6 +339,10 @@ class SoundManager {
       emitYoutubeAudio({ action: 'volume', channel: 'bg', volume: effectiveVol });
       emitYoutubeAudio({ action: 'resume', channel: 'bg', volume: effectiveVol });
     }
+  }
+
+  public resumeBackgroundMusic() {
+    this.restoreBackgroundMusic();
   }
 
   public setBgVolume(vol: number) {
@@ -329,9 +392,19 @@ class SoundManager {
     }
   }
 
+  public stopSfx() {
+    if (this.currentSfxAudio) {
+      this.currentSfxAudio.pause();
+      this.currentSfxAudio.currentTime = 0;
+      this.currentSfxAudio = null;
+    }
+    this.stopYoutubeAudio('sfx');
+  }
+
   public stopAllAudio() {
     this.stopBackgroundMusic();
     this.stopPreview();
+    this.stopSfx();
     this.stopYoutubeAudio('all');
     if (this.customAudio) {
       this.customAudio.pause();
@@ -348,7 +421,47 @@ class SoundManager {
 
   public playOneShotAudio(url: string) {
     if (this.isMuted) return;
-    const youtubeVideoId = getYoutubeVideoId(url);
+    this.initContext();
+    const resolved = this.resolveUrl(url) || url;
+    const youtubeVideoId = getYoutubeVideoId(resolved);
+
+    // Efeitos locais e presets do Show do Milhão tocam instantaneamente (0ms de latência)
+    if (!youtubeVideoId) {
+      try {
+        if (this.currentSfxAudio) {
+          this.currentSfxAudio.pause();
+          this.currentSfxAudio.currentTime = 0;
+          this.currentSfxAudio = null;
+        }
+
+        const cached = this.audioCache.get(resolved);
+        let audio: HTMLAudioElement;
+        if (cached) {
+          audio = cached.cloneNode() as HTMLAudioElement;
+        } else {
+          audio = new Audio(resolved);
+        }
+        audio.currentTime = 0;
+        audio.volume = this.sfxVolume > 0 ? this.sfxVolume : 0.95;
+        this.currentSfxAudio = audio;
+        audio.onended = () => {
+          if (this.currentSfxAudio === audio) {
+            this.currentSfxAudio = null;
+          }
+        };
+        const playPromise = audio.play();
+        if (playPromise !== undefined) {
+          playPromise.catch((e) => {
+            console.warn('Erro ao reproduzir áudio local/preset:', e);
+          });
+        }
+        return;
+      } catch (e) {
+        console.warn('Erro ao criar áudio:', e);
+      }
+    }
+
+    // Se for URL externa de YouTube não mapeada, toca pelo player embed
     if (youtubeVideoId) {
       this.isYoutubeSfxActive = true;
       emitYoutubeAudio({
@@ -356,23 +469,22 @@ class SoundManager {
         channel: 'sfx',
         videoId: youtubeVideoId,
         loop: false,
-        volume: 0.9,
+        volume: this.sfxVolume > 0 ? this.sfxVolume : 0.95,
       });
-      return;
-    }
-
-    try {
-      const audio = new Audio(url);
-      audio.volume = this.sfxVolume;
-      audio.play().catch(e => console.warn('Erro ao tocar áudio personalizado:', e));
-    } catch (e) {
-      console.warn('Erro ao criar áudio:', e);
     }
   }
 
   // --- BACKGROUND MUSIC ---
 
+  public isBackgroundMusicActive(): boolean {
+    if (this.customAudio) return true;
+    if (this.isYoutubeBgActive) return true;
+    if (this.bgInterval !== null) return true;
+    return false;
+  }
+
   public isBackgroundMusicPlaying(): boolean {
+    if (this.isBgZeroed) return false;
     if (this.customAudio && !this.customAudio.paused) return true;
     if (this.isYoutubeBgActive) return true;
     if (this.bgInterval !== null) return true;
@@ -404,14 +516,16 @@ class SoundManager {
       return;
     }
 
-    const activeCustomBg = customUrl || this.getActiveAudioUrl('bgMusic');
+    const rawBg = customUrl || this.getActiveAudioUrl('bgMusic');
+    const activeCustomBg = this.resolveUrl(rawBg);
 
-    // Se a mesma música de fundo já estiver tocando, mantém tocando sem interrupção nem reinício
+    // Se a mesma trilha de fundo já estiver ativa (tocando ou pausada no reveal da questão anterior), apenas retoma o áudio com volume restaurado
     if (
-      this.isBackgroundMusicPlaying() &&
+      this.isBackgroundMusicActive() &&
       this.currentTrack === type &&
       this.currentCustomUrl === (activeCustomBg || null)
     ) {
+      this.restoreBackgroundMusic();
       return;
     }
 
@@ -436,7 +550,9 @@ class SoundManager {
       }
 
       try {
-        this.customAudio = new Audio(activeCustomBg);
+        const cached = this.audioCache.get(activeCustomBg);
+        this.customAudio = cached ? (cached.cloneNode() as HTMLAudioElement) : new Audio(activeCustomBg);
+        this.customAudio.currentTime = 0;
         this.customAudio.loop = true;
         this.customAudio.volume = this.isMuted ? 0 : this.bgVolume;
         this.customAudio.play().catch(e => console.warn('Custom audio playback blocked:', e));
