@@ -29,53 +29,56 @@ export function YoutubeAudioPlayer() {
       const request = (event as CustomEvent<YoutubeAudioRequest>).detail;
       const channel = request.channel || (request.loop ? 'bg' : 'sfx');
 
-      if (request.action === 'stop') {
-        if (channel === 'bg' || channel === 'all') {
-          try {
-            bgPlayerRef.current?.contentWindow?.postMessage(
-              JSON.stringify({ event: 'command', func: 'stopVideo', args: [] }),
-              '*'
-            );
-          } catch {}
-          setBgPlayback(null);
+      // Executa de forma assíncrona fora da árvore de reconciliação do React
+      setTimeout(() => {
+        if (request.action === 'stop') {
+          if (channel === 'bg' || channel === 'all') {
+            try {
+              bgPlayerRef.current?.contentWindow?.postMessage(
+                JSON.stringify({ event: 'command', func: 'stopVideo', args: [] }),
+                '*'
+              );
+            } catch {}
+            setBgPlayback(null);
+          }
+          if (channel === 'sfx' || channel === 'all') {
+            try {
+              sfxPlayerRef.current?.contentWindow?.postMessage(
+                JSON.stringify({ event: 'command', func: 'stopVideo', args: [] }),
+                '*'
+              );
+            } catch {}
+            setSfxPlayback(null);
+          }
+          return;
         }
-        if (channel === 'sfx' || channel === 'all') {
-          try {
-            sfxPlayerRef.current?.contentWindow?.postMessage(
-              JSON.stringify({ event: 'command', func: 'stopVideo', args: [] }),
-              '*'
-            );
-          } catch {}
-          setSfxPlayback(null);
-        }
-        return;
-      }
 
-      if (request.action === 'volume') {
-        if (channel === 'bg' || channel === 'all') {
-          setBgPlayback((curr) => curr && { ...curr, volume: request.volume ?? curr.volume });
+        if (request.action === 'volume') {
+          if (channel === 'bg' || channel === 'all') {
+            setBgPlayback((curr) => curr && { ...curr, volume: request.volume ?? curr.volume });
+          }
+          if (channel === 'sfx' || channel === 'all') {
+            setSfxPlayback((curr) => curr && { ...curr, volume: request.volume ?? curr.volume });
+          }
+          return;
         }
-        if (channel === 'sfx' || channel === 'all') {
-          setSfxPlayback((curr) => curr && { ...curr, volume: request.volume ?? curr.volume });
+
+        if (!request.videoId) return;
+
+        if (channel === 'bg') {
+          setBgPlayback({
+            videoId: request.videoId,
+            loop: true,
+            volume: request.volume ?? 0.35,
+          });
+        } else {
+          setSfxPlayback({
+            videoId: request.videoId,
+            loop: Boolean(request.loop),
+            volume: request.volume ?? 0.7,
+          });
         }
-        return;
-      }
-
-      if (!request.videoId) return;
-
-      if (channel === 'bg') {
-        setBgPlayback({
-          videoId: request.videoId,
-          loop: true,
-          volume: request.volume ?? 0.35,
-        });
-      } else {
-        setSfxPlayback({
-          videoId: request.videoId,
-          loop: Boolean(request.loop),
-          volume: request.volume ?? 0.7,
-        });
-      }
+      }, 0);
     };
 
     window.addEventListener(YOUTUBE_AUDIO_EVENT, handleYoutubeAudio);

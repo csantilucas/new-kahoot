@@ -80,6 +80,7 @@ export function TvPlayer({ quiz, onExit }: TvPlayerProps) {
 
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const hasTriggeredFinalCountdownRef = useRef(false);
+  const isRevealedRef = useRef(false);
   const currentQuestion = questions[currentIndex];
   const totalQuestions = questions.length;
 
@@ -164,21 +165,20 @@ export function TvPlayer({ quiz, onExit }: TvPlayerProps) {
   // Advance step in step-by-step mode
   const advanceStep = useCallback(() => {
     const totalAlternatives = currentQuestion ? currentQuestion.alternatives.length : 4;
-    setEntranceStep((prev) => {
-      const next = prev + 1;
-      if (next > totalAlternatives) {
-        setIsEntranceFinished(true);
-      }
-      return next;
-    });
+    const next = entranceStep + 1;
+    setEntranceStep(next);
+    if (next > totalAlternatives) {
+      setIsEntranceFinished(true);
+    }
     if (quiz.soundEffects) soundManager.playTickingSound();
-  }, [currentQuestion, quiz.soundEffects]);
+  }, [currentQuestion, entranceStep, quiz.soundEffects]);
 
   // Initialize or reset question state
   const resetQuestionState = useCallback((index: number, skipMusic = false) => {
     if (timerRef.current) clearInterval(timerRef.current);
     setTimeLeft(questionDuration);
     setIsPaused(false);
+    isRevealedRef.current = false;
     setIsRevealed(false);
     setZoomedImage(null);
     setIsEntranceFinished(true);
@@ -267,33 +267,31 @@ export function TvPlayer({ quiz, onExit }: TvPlayerProps) {
 
   // Reveal answer with animation, studio flash and celebration
   const handleReveal = useCallback((isTimeUp = false) => {
-    setIsRevealed((prev) => {
-      if (prev) return prev; // already revealed
-      
-      // Trigger cinematic studio reveal flash (Plano 5)
-      setShowRevealFlash(true);
-      setTimeout(() => setShowRevealFlash(false), 450);
+    if (isRevealedRef.current) return;
+    isRevealedRef.current = true;
+    setIsRevealed(true);
 
-      if (quiz.soundEffects) {
-        if (isTimeUp) {
-          soundManager.playTimeUpBuzzer(quiz.timeUpSoundUrl || undefined);
-          setTimeout(() => {
-            soundManager.playCorrectAnswer(quiz.correctSoundUrl || undefined);
-            triggerConfetti();
-          }, 600);
-        } else {
-          soundManager.playRevealSuspense();
-          setTimeout(() => {
-            soundManager.playCorrectAnswer(quiz.correctSoundUrl || undefined);
-            triggerConfetti();
-          }, 350);
-        }
+    // Trigger cinematic studio reveal flash (Plano 5)
+    setShowRevealFlash(true);
+    setTimeout(() => setShowRevealFlash(false), 450);
+
+    if (quiz.soundEffects) {
+      if (isTimeUp) {
+        soundManager.playTimeUpBuzzer(quiz.timeUpSoundUrl || undefined);
+        setTimeout(() => {
+          soundManager.playCorrectAnswer(quiz.correctSoundUrl || undefined);
+          triggerConfetti();
+        }, 600);
       } else {
-        triggerConfetti();
+        soundManager.playRevealSuspense();
+        setTimeout(() => {
+          soundManager.playCorrectAnswer(quiz.correctSoundUrl || undefined);
+          triggerConfetti();
+        }, 350);
       }
-
-      return true;
-    });
+    } else {
+      triggerConfetti();
+    }
   }, [quiz, triggerConfetti]);
 
   // Countdown timer loop - purely decrements timeLeft every second
