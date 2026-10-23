@@ -205,14 +205,18 @@ export function TvPlayer({ quiz, onExit }: TvPlayerProps) {
     };
   }, [currentIndex, questions.length, resetQuestionState]);
 
-  // Parar trilha sonora e timers ao sair da TV (desmontagem do componente)
+  // Parar TODAS as trilhas sonoras, vídeos e timers ao sair da TV (desmontagem do componente)
   useEffect(() => {
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
-      soundManager.stopBackgroundMusic();
-      soundManager.restoreBackgroundMusic();
+      soundManager.stopAllAudio();
     };
   }, []);
+
+  const handleExitQuiz = useCallback(() => {
+    soundManager.stopAllAudio();
+    onExit();
+  }, [onExit]);
 
   // Orchestrate Entrance Effects on question load or effect change (only after intro)
   useEffect(() => {
@@ -290,7 +294,7 @@ export function TvPlayer({ quiz, onExit }: TvPlayerProps) {
     });
   }, [quiz, triggerConfetti]);
 
-  // Countdown timer loop - ONLY runs after entrance finishes!
+  // Countdown timer loop - purely decrements timeLeft every second
   useEffect(() => {
     if (!isEntranceFinished || isPaused || isRevealed || isCompleted || questions.length === 0) {
       if (timerRef.current) clearInterval(timerRef.current);
@@ -300,41 +304,51 @@ export function TvPlayer({ quiz, onExit }: TvPlayerProps) {
     timerRef.current = setInterval(() => {
       setTimeLeft((prev) => {
         if (prev <= 1) {
-          clearInterval(timerRef.current!);
-          handleReveal(true);
+          if (timerRef.current) clearInterval(timerRef.current);
           return 0;
         }
-
-        const next = prev - 1;
-        
-        // Quando entra nos 10 segundos da contagem final:
-        if (next <= 10 && !hasTriggeredFinalCountdownRef.current) {
-          hasTriggeredFinalCountdownRef.current = true;
-          // ZERAR o som da música de fundo para a contagem final ter foco total na TV
-          soundManager.zeroBackgroundMusic();
-          if (quiz.soundEffects) {
-            soundManager.playCountdownSound(quiz.countdownSoundUrl || undefined);
-          }
-        } else if (next > 10) {
-          if (quiz.soundEffects) {
-            soundManager.playTickingSound();
-          }
-        } else if (!quiz.countdownSoundUrl) {
-          // Se não houver áudio customizado de 10s (ex: YouTube do Silvio Santos),
-          // toca o batimento cardíaco procedural nos segundos finais
-          if (quiz.soundEffects) {
-            soundManager.playHeartbeat();
-          }
-        }
-
-        return next;
+        return prev - 1;
       });
     }, 1000);
 
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
     };
-  }, [isEntranceFinished, isPaused, isRevealed, isCompleted, warningTime, quiz, handleReveal]);
+  }, [isEntranceFinished, isPaused, isRevealed, isCompleted, questions.length]);
+
+  // Audio & Reveal side-effects driven safely by timeLeft changes in effect phase
+  useEffect(() => {
+    if (!isEntranceFinished || isPaused || isCompleted || questions.length === 0) {
+      return;
+    }
+
+    // Tempo esgotado -> Revela a resposta
+    if (timeLeft === 0 && !isRevealed) {
+      handleReveal(true);
+      return;
+    }
+
+    if (isRevealed) return;
+
+    // Quando entra nos 10 segundos da contagem final:
+    if (timeLeft <= 10 && !hasTriggeredFinalCountdownRef.current) {
+      hasTriggeredFinalCountdownRef.current = true;
+      // ZERAR o som da música de fundo para a contagem final ter foco total na TV
+      soundManager.zeroBackgroundMusic();
+      if (quiz.soundEffects) {
+        soundManager.playCountdownSound(quiz.countdownSoundUrl || undefined);
+      }
+    } else if (timeLeft > 10) {
+      if (quiz.soundEffects) {
+        soundManager.playTickingSound();
+      }
+    } else if (!quiz.countdownSoundUrl) {
+      // Se não houver áudio customizado de 10s, toca o batimento cardíaco procedural nos segundos finais
+      if (quiz.soundEffects) {
+        soundManager.playHeartbeat();
+      }
+    }
+  }, [timeLeft, isEntranceFinished, isPaused, isRevealed, isCompleted, questions.length, quiz, handleReveal]);
 
   // Next Question with Broadcast TV Transition (Plano 5)
   const handleNext = useCallback(() => {
@@ -476,7 +490,7 @@ export function TvPlayer({ quiz, onExit }: TvPlayerProps) {
         <p className="text-sm text-slate-500 max-w-md mb-6">
           Cadastre perguntas e alternativas antes de iniciar a apresentação na TV.
         </p>
-        <Button size="lg" onClick={onExit}>
+        <Button size="lg" onClick={handleExitQuiz}>
           Voltar ao Painel
         </Button>
       </div>
@@ -512,7 +526,7 @@ export function TvPlayer({ quiz, onExit }: TvPlayerProps) {
             <Button size="lg" onClick={handleRestart} className="gap-2 font-medium">
               <RotateCcw className="h-4 w-4" /> Recomeçar Simulado
             </Button>
-            <Button variant="outline" size="lg" onClick={onExit} className="gap-2">
+            <Button variant="outline" size="lg" onClick={handleExitQuiz} className="gap-2">
               <X className="h-4 w-4" /> Sair para o Painel
             </Button>
           </div>
@@ -795,7 +809,7 @@ export function TvPlayer({ quiz, onExit }: TvPlayerProps) {
                 variant="ghost"
                 size="icon"
                 className="h-8 w-8 rounded-lg text-slate-400 hover:text-destructive hover:bg-destructive/10"
-                onClick={onExit}
+                onClick={handleExitQuiz}
                 title="Sair do Modo TV"
               >
                 <X className="h-4 w-4" />

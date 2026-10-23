@@ -31,9 +31,21 @@ export function YoutubeAudioPlayer() {
 
       if (request.action === 'stop') {
         if (channel === 'bg' || channel === 'all') {
+          try {
+            bgPlayerRef.current?.contentWindow?.postMessage(
+              JSON.stringify({ event: 'command', func: 'stopVideo', args: [] }),
+              '*'
+            );
+          } catch {}
           setBgPlayback(null);
         }
         if (channel === 'sfx' || channel === 'all') {
+          try {
+            sfxPlayerRef.current?.contentWindow?.postMessage(
+              JSON.stringify({ event: 'command', func: 'stopVideo', args: [] }),
+              '*'
+            );
+          } catch {}
           setSfxPlayback(null);
         }
         return;

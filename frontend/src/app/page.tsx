@@ -8,6 +8,7 @@ import { LoginModal } from '@/components/login-modal';
 import { QuestionsList } from '@/components/questions-list';
 import { TvPlayer } from '@/components/tv-player';
 import { SoundControls } from '@/components/sound-controls';
+import { soundManager } from '@/lib/sound';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Plus, LogIn, LogOut, Search, Tv } from 'lucide-react';
@@ -123,7 +124,10 @@ export default function Home() {
     return (
       <TvPlayer
         quiz={activeQuizForTv}
-        onExit={() => setActiveQuizForTv(null)}
+        onExit={() => {
+          soundManager.stopAllAudio();
+          setActiveQuizForTv(null);
+        }}
       />
     );
   }

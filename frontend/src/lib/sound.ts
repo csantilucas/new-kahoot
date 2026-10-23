@@ -57,7 +57,9 @@ function emitYoutubeAudio(detail: {
   volume?: number;
 }) {
   if (typeof window !== 'undefined') {
-    window.dispatchEvent(new CustomEvent(YOUTUBE_AUDIO_EVENT, { detail }));
+    window.setTimeout(() => {
+      window.dispatchEvent(new CustomEvent(YOUTUBE_AUDIO_EVENT, { detail }));
+    }, 0);
   }
 }
 
@@ -316,6 +318,23 @@ class SoundManager {
       this.previewingYoutube = false;
       this.youtubeAudioKind = null;
     }
+  }
+
+  public stopAllAudio() {
+    this.stopBackgroundMusic();
+    this.stopPreview();
+    this.stopYoutubeAudio('all');
+    if (this.customAudio) {
+      this.customAudio.pause();
+      this.customAudio.currentTime = 0;
+      this.customAudio = null;
+    }
+    if (this.previewAudioEl) {
+      this.previewAudioEl.pause();
+      this.previewAudioEl.currentTime = 0;
+      this.previewAudioEl = null;
+    }
+    this.isBgZeroed = false;
   }
 
   public playOneShotAudio(url: string) {
