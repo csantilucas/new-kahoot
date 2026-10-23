@@ -185,6 +185,11 @@ export function TvPlayer({ quiz, onExit }: TvPlayerProps) {
     // Interrompe qualquer efeito sonoro da questão anterior (ex: vinheta de resposta certa)
     soundManager.stopSfx();
 
+    // Toca o áudio de início de cada pergunta (vinheta da pergunta)
+    if (quiz.soundEffects !== false) {
+      soundManager.playQuestionStart(quiz.questionStartSoundUrl || undefined);
+    }
+
     // Restaura o volume normal e retoma a música de fundo para a nova pergunta
     soundManager.resumeBackgroundMusic();
 
@@ -298,13 +303,8 @@ export function TvPlayer({ quiz, onExit }: TvPlayerProps) {
     setTimeout(() => setShowRevealFlash(false), 450);
 
     if (quiz.soundEffects !== false) {
-      if (isTimeUp) {
-        // Tempo esgotado: toca trilha de tempo esgotado ou seleção de perguntas
-        soundManager.playTimeUpBuzzer(quiz.timeUpSoundUrl || undefined);
-      } else {
-        // Revelado pelo apresentador: toca vinheta de CERTA RESPOSTA!
-        soundManager.playCorrectAnswer(quiz.correctSoundUrl || undefined);
-      }
+      // O áudio da resposta certa toca SEMPRE que a resposta for exibida (seja manualmente ou após o tempo esgotar)
+      soundManager.playCorrectAnswer(quiz.correctSoundUrl || undefined);
     }
 
     // Dispara a celebração visual com confetes

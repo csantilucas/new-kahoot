@@ -38,6 +38,7 @@ export interface Quiz {
   timeUpSoundUrl?: string | null;
   countdownSoundUrl?: string | null;
   confettiSoundUrl?: string | null;
+  questionStartSoundUrl?: string | null;
   isPublished: boolean;
   createdAt?: string;
   updatedAt?: string;

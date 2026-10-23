@@ -61,6 +61,12 @@ const CATEGORIES: { type: AudioCategory; label: string; icon: any; desc: string 
     icon: Timer,
     desc: 'Som tocado a cada segundo nos 10 segundos finais da questão',
   },
+  {
+    type: 'questionStart',
+    label: 'Início da Pergunta (Vinheta)',
+    icon: Sparkles,
+    desc: 'Som tocado no exato instante em que a pergunta entra na tela',
+  },
 ];
 
 export function AudioConfigModal({ isOpen, onClose }: AudioConfigModalProps) {

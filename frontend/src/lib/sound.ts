@@ -1,6 +1,6 @@
 // Web Audio API procedural synthesizer + Custom Audio Player for Show do Milhão & Interactive TV Quiz
 
-export type AudioCategory = 'bgMusic' | 'correct' | 'wrong' | 'timeUp' | 'ticking' | 'countdown' | 'fiftyFifty';
+export type AudioCategory = 'bgMusic' | 'correct' | 'wrong' | 'timeUp' | 'ticking' | 'countdown' | 'fiftyFifty' | 'questionStart';
 
 export interface CustomAudioItem {
   id: string;
@@ -19,6 +19,7 @@ export interface CustomAudioConfig {
   activeTickingId?: string | null;
   activeCountdownId?: string | null;
   activeFiftyFiftyId?: string | null;
+  activeQuestionStartId?: string | null;
   items: CustomAudioItem[];
 }
 
@@ -31,10 +32,12 @@ export const KNOWN_AUDIO_PRESETS: Record<string, string> = {
   'HvPajEdundA': '/sounds/certa-resposta.mp3',
   // Silvio Santos - 10 Segundos!
   'saFHtWkxNMw': '/sounds/10-segundos.mp3',
-  // Show do Milhão - Trilha Seleção de Perguntas / Tempo Esgotado / Confete
-  'nfLftXz_37g': '/sounds/tempo-esgotado.mp3',
+  // Show do Milhão - Trilha Seleção de Perguntas / Início da Pergunta
+  'nfLftXz_37g': '/sounds/inicio-pergunta.mp3',
   // Show do Milhão - Tema de Abertura (Completo)
   'wbFxNbLWaRo': '/sounds/abertura.mp3',
+  // Silvio Santos - Vamos para a pergunta!
+  '4nnmlM7j1CM': '/sounds/inicio-pergunta.mp3',
 };
 
 export function getYoutubeVideoId(value: string): string | null {
@@ -113,6 +116,7 @@ class SoundManager {
       '/sounds/10-segundos.mp3',
       '/sounds/tempo-esgotado.mp3',
       '/sounds/abertura.mp3',
+      '/sounds/inicio-pergunta.mp3',
     ];
     common.forEach((src) => {
       try {
@@ -226,7 +230,7 @@ class SoundManager {
     return item ? item.url : null;
   }
 
-  private getActiveKey(category: AudioCategory): 'activeBgMusicId' | 'activeCorrectId' | 'activeWrongId' | 'activeTimeUpId' | 'activeTickingId' | 'activeCountdownId' | 'activeFiftyFiftyId' {
+  private getActiveKey(category: AudioCategory): 'activeBgMusicId' | 'activeCorrectId' | 'activeWrongId' | 'activeTimeUpId' | 'activeTickingId' | 'activeCountdownId' | 'activeFiftyFiftyId' | 'activeQuestionStartId' {
     switch (category) {
       case 'bgMusic': return 'activeBgMusicId';
       case 'correct': return 'activeCorrectId';
@@ -235,6 +239,7 @@ class SoundManager {
       case 'ticking': return 'activeTickingId';
       case 'countdown': return 'activeCountdownId';
       case 'fiftyFifty': return 'activeFiftyFiftyId';
+      case 'questionStart': return 'activeQuestionStartId';
     }
   }
 
@@ -823,6 +828,12 @@ class SoundManager {
     gain.connect(this.sfxGainNode);
     osc.start(t);
     osc.stop(t + 0.9);
+  }
+
+  // SFX: Início de Cada Pergunta (Vinheta do Show do Milhão / Silvio Santos)
+  public playQuestionStart(customUrl?: string) {
+    const custom = customUrl || this.getActiveAudioUrl('questionStart') || '/sounds/inicio-pergunta.mp3';
+    this.playOneShotAudio(custom);
   }
 
   // SFX: Correct Answer Fanfare / Chime
