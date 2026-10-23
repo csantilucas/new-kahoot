@@ -42,11 +42,11 @@ export const AULAO_ENEM_QUIZ: InitialQuizData = {
   soundEffects: true,
   autoReveal: true,
   showExplanation: true,
-  customMusicUrl: 'https://www.youtube.com/watch?v=wbFxNbLWaRo',
-  correctSoundUrl: 'https://www.youtube.com/watch?v=HvPajEdundA',
-  timeUpSoundUrl: 'https://www.youtube.com/watch?v=nfLftXz_37g',
-  countdownSoundUrl: 'https://www.youtube.com/watch?v=saFHtWkxNMw',
-  confettiSoundUrl: 'https://www.youtube.com/watch?v=nfLftXz_37g',
+  customMusicUrl: '/sounds/abertura.mp3',
+  correctSoundUrl: '/sounds/certa-resposta.mp3',
+  timeUpSoundUrl: '/sounds/tempo-esgotado.mp3',
+  countdownSoundUrl: '/sounds/10-segundos.mp3',
+  confettiSoundUrl: '/sounds/tempo-esgotado.mp3',
   questions: [
     {
       order: 1,

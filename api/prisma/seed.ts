@@ -5,23 +5,26 @@ import { AULAO_ENEM_QUIZ } from '../src/data/initial-quiz';
 export async function runSeed() {
   console.log('🚀 Iniciando processo de seed do banco de dados...');
 
-  // 1. Garantir usuário administrador padrão
-  const adminCount = await prisma.user.count();
-  if (adminCount === 0) {
-    const hashedPassword = await bcrypt.hash('admin123', 10);
-    await prisma.user.create({
-      data: {
-        name: 'Professor / Apresentador',
-        email: 'admin@revisao.com',
-        password: hashedPassword,
-      },
-    });
-    console.log('✅ Usuário administrador padrão criado: admin@revisao.com / admin123');
-  } else {
-    console.log('ℹ️ Usuário administrador já existe.');
-  }
+  // 1. Zerar o banco de dados completamente antes de inserir os dados
+  console.log('🧹 Zerando o banco de dados completamente...');
+  await prisma.alternative.deleteMany({});
+  await prisma.question.deleteMany({});
+  await prisma.quiz.deleteMany({});
+  await prisma.user.deleteMany({});
+  console.log('✅ Banco de dados zerado com sucesso!');
 
-  // 2. Verificar integridade e sincronizar imagens de apoio
+  // 2. Criar usuário administrador padrão
+  const hashedPassword = await bcrypt.hash('admin123', 10);
+  await prisma.user.create({
+    data: {
+      name: 'Professor / Apresentador',
+      email: 'admin@revisao.com',
+      password: hashedPassword,
+    },
+  });
+  console.log('✅ Usuário administrador padrão criado: admin@revisao.com / admin123');
+
+  // 3. Verificar integridade e sincronizar imagens de apoio
   try {
     const fs = await import('fs');
     const path = await import('path');
@@ -45,12 +48,6 @@ export async function runSeed() {
   } catch (imgErr) {
     console.warn('Aviso sobre verificação de imagens:', imgErr);
   }
-
-  // 3. Limpar quiz ENEM anterior para atualização completa e limpa
-  console.log('🔄 Atualizando quiz "Aulão ENEM Oficial"...');
-  await prisma.quiz.deleteMany({
-    where: { category: 'ENEM' },
-  });
 
   // 4. Cadastrar o Aulão ENEM Oficial com as 18 questões completas
   const createdQuiz = await prisma.quiz.create({

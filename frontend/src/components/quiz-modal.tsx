@@ -81,11 +81,11 @@ export function QuizModal({ isOpen, onClose, onSuccess, quizToEdit }: QuizModalP
       setEntranceEffect('normal');
       setShowExplanation(true);
 
-      setCustomMusicUrl('https://www.youtube.com/watch?v=wbFxNbLWaRo');
-      setCorrectSoundUrl('https://www.youtube.com/watch?v=HvPajEdundA');
-      setTimeUpSoundUrl('https://www.youtube.com/watch?v=nfLftXz_37g');
-      setCountdownSoundUrl('https://www.youtube.com/watch?v=saFHtWkxNMw');
-      setConfettiSoundUrl('https://www.youtube.com/watch?v=nfLftXz_37g');
+      setCustomMusicUrl('/sounds/abertura.mp3');
+      setCorrectSoundUrl('/sounds/certa-resposta.mp3');
+      setTimeUpSoundUrl('/sounds/tempo-esgotado.mp3');
+      setCountdownSoundUrl('/sounds/10-segundos.mp3');
+      setConfettiSoundUrl('/sounds/tempo-esgotado.mp3');
     }
     setError('');
     soundManager.stopPreview();
@@ -378,10 +378,10 @@ export function QuizModal({ isOpen, onClose, onSuccess, quizToEdit }: QuizModalP
                 )}
               </div>
               <Input
-                type="url"
+                type="text"
                 value={customMusicUrl}
                 onChange={(e) => setCustomMusicUrl(e.target.value)}
-                placeholder="Ex: https://www.youtube.com/watch?v=wbFxNbLWaRo"
+                placeholder="Ex: /sounds/abertura.mp3 ou link de áudio"
                 className="h-8 text-xs bg-white dark:bg-slate-950"
               />
             </div>
@@ -405,10 +405,10 @@ export function QuizModal({ isOpen, onClose, onSuccess, quizToEdit }: QuizModalP
                 )}
               </div>
               <Input
-                type="url"
+                type="text"
                 value={correctSoundUrl}
                 onChange={(e) => setCorrectSoundUrl(e.target.value)}
-                placeholder="Ex: https://www.youtube.com/watch?v=HvPajEdundA"
+                placeholder="Ex: /sounds/certa-resposta.mp3 ou link de áudio"
                 className="h-8 text-xs bg-white dark:bg-slate-950"
               />
             </div>
@@ -432,10 +432,10 @@ export function QuizModal({ isOpen, onClose, onSuccess, quizToEdit }: QuizModalP
                 )}
               </div>
               <Input
-                type="url"
+                type="text"
                 value={timeUpSoundUrl}
                 onChange={(e) => setTimeUpSoundUrl(e.target.value)}
-                placeholder="Ex: https://www.youtube.com/watch?v=nfLftXz_37g"
+                placeholder="Ex: /sounds/tempo-esgotado.mp3 ou link de áudio"
                 className="h-8 text-xs bg-white dark:bg-slate-950"
               />
             </div>
@@ -459,10 +459,10 @@ export function QuizModal({ isOpen, onClose, onSuccess, quizToEdit }: QuizModalP
                 )}
               </div>
               <Input
-                type="url"
+                type="text"
                 value={countdownSoundUrl}
                 onChange={(e) => setCountdownSoundUrl(e.target.value)}
-                placeholder="Ex: https://www.youtube.com/watch?v=saFHtWkxNMw"
+                placeholder="Ex: /sounds/10-segundos.mp3 ou link de áudio"
                 className="h-8 text-xs bg-white dark:bg-slate-950"
               />
             </div>
@@ -486,10 +486,10 @@ export function QuizModal({ isOpen, onClose, onSuccess, quizToEdit }: QuizModalP
                 )}
               </div>
               <Input
-                type="url"
+                type="text"
                 value={confettiSoundUrl}
                 onChange={(e) => setConfettiSoundUrl(e.target.value)}
-                placeholder="Ex: https://www.youtube.com/watch?v=nfLftXz_37g"
+                placeholder="Ex: /sounds/tempo-esgotado.mp3 ou link de áudio"
                 className="h-8 text-xs bg-white dark:bg-slate-950"
               />
             </div>
