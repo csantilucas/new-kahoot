@@ -67,8 +67,7 @@ export function TvPlayer({ quiz, onExit }: TvPlayerProps) {
   // Zoom Image modal state
   const [zoomedImage, setZoomedImage] = useState<string | null>(null);
 
-  // Font size toggle for distance viewing ('base' | 'large')
-  const [isLargeFont, setIsLargeFont] = useState(false);
+
 
   // Audio configuration modal
   const [isAudioModalOpen, setIsAudioModalOpen] = useState(false);
@@ -577,9 +576,28 @@ export function TvPlayer({ quiz, onExit }: TvPlayerProps) {
     return 'bg-gradient-to-r from-[#22104e]/95 via-[#1b1446]/95 to-[#0e193a]/95 border-2 border-indigo-400/40 hover:border-[#00E5FF] text-white shadow-md hover:shadow-[0_0_18px_rgba(0,229,255,0.3)] cursor-default transition-all duration-200';
   };
 
+  // Auto-calculated statement font size so questions always fit 100% on screen without scrolling or overflow-hidden
+  const getStatementFontClasses = (text: string) => {
+    const len = (text || '').length;
+    if (len < 100) {
+      return 'text-lg sm:text-xl md:text-2xl lg:text-[25px] xl:text-[28px] leading-relaxed font-semibold';
+    }
+    if (len < 220) {
+      return 'text-base sm:text-lg md:text-xl lg:text-[21px] xl:text-[23px] leading-relaxed font-medium';
+    }
+    if (len < 400) {
+      return 'text-sm sm:text-base md:text-lg lg:text-[18px] xl:text-[20px] leading-relaxed font-medium';
+    }
+    return 'text-xs sm:text-sm md:text-base lg:text-[16px] xl:text-[18px] leading-normal font-medium';
+  };
+
+  // Large alternative font size requested for Telão (commanding letters and large badge)
+  const altFontClasses = 'text-base sm:text-lg md:text-xl lg:text-[22px] xl:text-[25px] 2xl:text-[28px] font-bold leading-snug';
+  const altBadgeClasses = 'w-10 h-10 sm:w-11 sm:h-11 md:w-12 md:h-12 lg:w-14 lg:h-14 text-base sm:text-lg md:text-xl lg:text-2xl font-black';
+
   return (
     <div
-      className="relative h-screen max-h-screen overflow-hidden w-full flex flex-col justify-between select-none bg-gradient-to-br from-[#051124] via-[#091b38] to-[#040e20] text-slate-100 border-[3px] border-[#00E5FF]/40 shadow-[0_0_40px_rgba(0,229,255,0.2)]"
+      className="relative h-screen h-[100dvh] max-h-screen max-h-[100dvh] overflow-hidden w-full flex flex-col justify-between select-none bg-gradient-to-br from-[#051124] via-[#091b38] to-[#040e20] text-slate-100 border-[3px] border-[#00E5FF]/40 shadow-[0_0_40px_rgba(0,229,255,0.2)]"
     >
       {/* BACKGROUND IMAGE (milhao.png) with studio darkening overlay for broadcast contrast */}
       <div className="pointer-events-none absolute inset-0 z-0 overflow-hidden">
@@ -900,6 +918,7 @@ export function TvPlayer({ quiz, onExit }: TvPlayerProps) {
 
             {/* Utilities: Audio, Mute, Fullscreen, Exit */}
             <div className="flex items-center gap-1 pl-1 border-l border-cyan-500/30">
+
               <Button
                 variant="outline"
                 size="icon"
@@ -945,10 +964,10 @@ export function TvPlayer({ quiz, onExit }: TvPlayerProps) {
       </header>
 
       {/* CENTER STAGE: EXACT MATCH TO USER MOCKUPS WITH DIRECTIONAL TRANSITION (PLANO 5) */}
-      <main className="relative z-10 flex-1 min-h-0 px-4 sm:px-6 md:px-8 lg:px-12 xl:px-14 py-2 sm:py-3 w-full max-w-[1850px] mx-auto flex flex-col justify-center overflow-hidden">
+      <main className="relative z-10 flex-1 min-h-0 px-3 sm:px-6 md:px-8 lg:px-10 py-2 sm:py-2.5 w-full max-w-[1920px] mx-auto flex flex-col justify-center overflow-hidden">
         <div
           key={currentIndex}
-          className={`grid grid-cols-1 lg:grid-cols-12 gap-5 lg:gap-7 xl:gap-9 items-stretch w-full max-h-full min-h-0 ${navDirection === 'next' ? 'anim-question-next' : 'anim-question-prev'
+          className={`grid grid-cols-1 lg:grid-cols-12 gap-3.5 sm:gap-4 lg:gap-6 xl:gap-8 items-stretch w-full h-full min-h-0 ${navDirection === 'next' ? 'anim-question-next' : 'anim-question-prev'
             }`}
         >
 
@@ -961,10 +980,10 @@ export function TvPlayer({ quiz, onExit }: TvPlayerProps) {
               : 'opacity-100 translate-x-0'
             }`}>
             <div
-              className="p-5 sm:p-6 md:p-7 lg:p-8 xl:p-9 rounded-[28px] md:rounded-[32px] transition-all flex-1 min-h-0 flex flex-col justify-center max-h-[calc(100vh-95px)] overflow-hidden bg-gradient-to-br from-[#1c0f42] via-[#161245] to-[#0a1532] border-2 border-cyan-400/40 shadow-[0_12px_40px_rgba(0,0,0,0.6),0_0_25px_rgba(0,229,255,0.18)] text-white"
+              className="p-4 sm:p-5 md:p-6 lg:p-7 xl:p-8 rounded-[24px] md:rounded-[30px] transition-all flex-1 min-h-0 flex flex-col bg-gradient-to-br from-[#1c0f42] via-[#161245] to-[#0a1532] border-2 border-cyan-400/40 shadow-[0_12px_40px_rgba(0,0,0,0.6),0_0_25px_rgba(0,229,255,0.18)] text-white"
             >
               {/* Question Header Banner matching user's attached reference */}
-              <div className="flex items-center justify-between pb-3 mb-3 border-b-2 border-cyan-400/30 shrink-0">
+              <div className="flex items-center justify-between pb-2.5 mb-2.5 sm:pb-3 sm:mb-3 border-b-2 border-cyan-400/30 shrink-0">
                 <div className="flex items-baseline gap-2.5">
                   <span className="text-xs sm:text-sm font-black tracking-[0.25em] text-[#00E5FF] uppercase drop-shadow-[0_0_12px_rgba(0,229,255,0.7)]">
                     QUESTÃO
@@ -983,12 +1002,9 @@ export function TvPlayer({ quiz, onExit }: TvPlayerProps) {
                 </div>
               </div>
 
-              {/* Question Statement Text with Lateral Responsiveness */}
-              <div className="flex-1 min-h-0 overflow-y-auto pr-2 custom-tv-scrollbar flex flex-col justify-center">
-                <p className={`font-medium leading-relaxed whitespace-pre-line text-left text-slate-100 ${isLargeFont
-                    ? 'text-base sm:text-lg md:text-xl lg:text-2xl'
-                    : 'text-sm sm:text-base md:text-[16px] lg:text-[17px] xl:text-[18px] 2xl:text-[20px]'
-                  }`}>
+              {/* Question Statement Text - Guaranteed to fit on screen without scroll or overflow-hidden */}
+              <div className="flex-1 min-h-0 flex flex-col justify-center py-1">
+                <p className={`whitespace-pre-line text-left text-slate-100 ${getStatementFontClasses(currentQuestion.statement)}`}>
                   {currentQuestion.statement}
                 </p>
               </div>
@@ -999,19 +1015,19 @@ export function TvPlayer({ quiz, onExit }: TvPlayerProps) {
           <div className={`${currentQuestion.imageUrl
               ? 'lg:col-span-6 xl:col-span-5 2xl:col-span-5'
               : 'lg:col-span-5 xl:col-span-4 2xl:col-span-4'
-            } flex flex-col justify-center gap-2.5 sm:gap-3 min-h-0 h-full`}>
+            } flex flex-col justify-center gap-2 sm:gap-2.5 min-h-0 h-full`}>
 
             {/* IMAGE CARD (DIRECTLY ON TOP OF ALTERNATIVES AS IN USER MOCKUP) */}
             {currentQuestion.imageUrl && (
               <div
                 onClick={() => setZoomedImage(currentQuestion.imageUrl || null)}
-                className="relative group cursor-pointer rounded-[22px] overflow-hidden bg-[#0c1836] border-2 border-cyan-400/40 shadow-xl p-2.5 max-h-48 sm:max-h-56 md:max-h-64 lg:max-h-72 flex items-center justify-center shrink-0 w-full transition-all duration-300 hover:border-cyan-300"
+                className="relative group cursor-pointer rounded-2xl overflow-hidden bg-[#0c1836] border-2 border-cyan-400/40 shadow-xl p-2 max-h-[19vh] sm:max-h-[21vh] lg:max-h-[23vh] flex items-center justify-center shrink-0 w-full transition-all duration-300 hover:border-cyan-300"
                 title="Clique para ampliar a imagem na TV (ou aperte a tecla Z)"
               >
                 <img
                   src={currentQuestion.imageUrl}
                   alt="Imagem de apoio da questão"
-                  className="max-h-44 sm:max-h-52 md:max-h-60 lg:max-h-64 w-auto max-w-full object-contain object-center transition-transform group-hover:scale-[1.01]"
+                  className="max-h-[16vh] sm:max-h-[18vh] lg:max-h-[20vh] w-auto max-w-full object-contain object-center transition-transform group-hover:scale-[1.01]"
                 />
                 <div className="absolute bottom-2 right-2 px-2.5 py-1 bg-black/85 text-[#00E5FF] text-[10px] md:text-xs rounded-lg flex items-center gap-1.5 opacity-90 group-hover:opacity-100 transition-opacity font-bold border border-cyan-400/40 shadow-md">
                   <ZoomIn className="h-3 w-3" /> Ampliar (Z)
@@ -1019,9 +1035,12 @@ export function TvPlayer({ quiz, onExit }: TvPlayerProps) {
               </div>
             )}
 
-            {/* ALTERNATIVES PILLS (UNDER THE IMAGE) */}
-            <div className={`flex flex-col justify-center ${currentQuestion.imageUrl ? 'gap-1.5 sm:gap-2' : 'gap-2 sm:gap-3 flex-1'
-              }`}>
+            {/* ALTERNATIVES PILLS (UNDER THE IMAGE) - NO SCROLLBAR, FULL VISIBILITY */}
+            <div className={`flex flex-col justify-center ${
+              currentQuestion.imageUrl
+                ? 'gap-2 sm:gap-2.5 xl:gap-3 flex-1 min-h-0'
+                : 'gap-2.5 sm:gap-3 xl:gap-4 flex-1'
+            }`}>
               {currentQuestion.alternatives.map((alt, altIdx) => {
                 const cardStyles = getAlternativeCardStyles(alt);
                 const badgeStyle = getBadgeStyle(alt);
@@ -1059,7 +1078,11 @@ export function TvPlayer({ quiz, onExit }: TvPlayerProps) {
                     style={{
                       transitionDelay: altTransitionDelay,
                     }}
-                    className={`relative overflow-hidden flex items-center px-4 py-2.5 sm:px-5 sm:py-3 rounded-full md:rounded-2xl transition-all duration-300 text-left ${cardStyles} ${entranceAnimClasses} ${isRevealed && alt.isCorrect ? 'anim-winner-glow ring-4 ring-emerald-300/80 shadow-[0_0_35px_rgba(16,185,129,0.8)]' : ''
+                    className={`relative overflow-hidden flex items-center px-4 py-2.5 sm:px-5 sm:py-3.5 xl:py-4 rounded-2xl md:rounded-[22px] transition-all duration-300 text-left ${
+                      currentQuestion.imageUrl
+                        ? 'shrink-0 min-h-[50px] sm:min-h-[56px] xl:min-h-[64px]'
+                        : 'flex-1 min-h-[58px] sm:min-h-[66px] xl:min-h-[76px]'
+                    } ${cardStyles} ${entranceAnimClasses} ${isRevealed && alt.isCorrect ? 'anim-winner-glow ring-4 ring-emerald-300/80 shadow-[0_0_35px_rgba(16,185,129,0.8)]' : ''
                       }`}
                   >
                     {/* Subtle Sheen Glint on unrevealed alternatives */}
@@ -1069,23 +1092,22 @@ export function TvPlayer({ quiz, onExit }: TvPlayerProps) {
 
                     {/* Letter badge: circular badge with electric cyan styling */}
                     <div
-                      className={`w-8 h-8 sm:w-9 sm:h-9 rounded-full flex items-center justify-center font-black text-xs sm:text-sm shrink-0 mr-3 shadow-md ${badgeStyle}`}
+                      className={`rounded-full flex items-center justify-center font-black shrink-0 mr-3.5 sm:mr-4 shadow-md ${badgeStyle} ${altBadgeClasses}`}
                     >
                       {alt.letter.toLowerCase()}
                     </div>
 
-                    {/* Alternative text */}
-                    <div className="flex-1 pr-1">
-                      <span className={`leading-snug block font-semibold line-clamp-3 ${isLargeFont ? 'text-xs sm:text-sm md:text-base' : 'text-xs sm:text-sm md:text-[14px]'
-                        }`}>
+                    {/* Alternative text - Large font size */}
+                    <div className="flex-1 min-w-0 pr-1">
+                      <span className={`leading-snug block break-words ${altFontClasses}`}>
                         {alt.text}
                       </span>
                     </div>
 
                     {/* Stamp when revealed */}
                     {isRevealed && alt.isCorrect && (
-                      <span className="ml-2 px-3.5 py-1 text-[11px] sm:text-xs font-black rounded-full bg-white text-emerald-900 shrink-0 shadow-lg ring-2 ring-emerald-300 animate-in zoom-in-75 duration-300 flex items-center gap-1">
-                        <Sparkles className="h-3.5 w-3.5 text-emerald-600" />
+                      <span className="ml-2 px-3 py-1.5 text-xs sm:text-sm md:text-base font-black rounded-full bg-white text-emerald-900 shrink-0 shadow-lg ring-2 ring-emerald-300 animate-in zoom-in-75 duration-300 flex items-center gap-1.5">
+                        <Sparkles className="h-4 w-4 text-emerald-600" />
                         CORRETA
                       </span>
                     )}
