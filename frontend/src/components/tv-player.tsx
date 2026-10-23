@@ -1,9 +1,9 @@
 "use client";
 
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import confetti from 'canvas-confetti';
 import { Quiz, Question, Alternative } from '@/lib/api';
-import { soundManager, getYoutubeVideoId } from '@/lib/sound';
+import { soundManager } from '@/lib/sound';
 import { Button } from './ui/button';
 import { Badge } from './ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from './ui/dialog';
@@ -21,15 +21,15 @@ import {
   X,
   HelpCircle,
   Trophy,
-  Sun,
-  Moon,
   Clock,
   BookOpen,
   ZoomIn,
-  Type,
+  ZoomOut,
   Music,
-  Zap,
   ArrowRightCircle,
+  Image as ImageIcon,
+  LayoutGrid,
+  CheckCircle2,
 } from 'lucide-react';
 import { AudioConfigModal } from './audio-config-modal';
 
@@ -61,18 +61,27 @@ export function TvPlayer({ quiz, onExit }: TvPlayerProps) {
   const [isEntranceFinished, setIsEntranceFinished] = useState(false);
   const [entranceStep, setEntranceStep] = useState(0);
 
-  // Tema Show do Milhão TV Studio: cores vibrantes (Navy Profundo + Ciano Elétrico + Violeta Real)
+  // Tema Show do Milhão TV Studio
   const [isLightMode, setIsLightMode] = useState(false);
 
   // Zoom Image modal state
   const [zoomedImage, setZoomedImage] = useState<string | null>(null);
 
+  // Controle de Escala de Fonte para o Telão LED (-2 a +4)
+  const [fontScaleOffset, setFontScaleOffset] = useState<number>(0);
 
+  // Modo de visualização da coluna direita quando há imagem:
+  // 'split' = Imagem + Alternativas lado a lado/empilhadas de forma inteligente
+  // 'image_focus' = Imagem gigante ocupando a coluna direita (ideal para leitura do gráfico/charge antes das alternativas)
+  const [rightPanelMode, setRightPanelMode] = useState<'split' | 'image_focus'>('split');
+
+  // Mostrar/ocultar explicação após revelar
+  const [showExplanationBanner, setShowExplanationBanner] = useState(true);
 
   // Audio configuration modal
   const [isAudioModalOpen, setIsAudioModalOpen] = useState(false);
 
-  // Motion Transitions & Studio Lighting (Plano 5)
+  // Motion Transitions & Studio Lighting
   const [navDirection, setNavDirection] = useState<'next' | 'prev'>('next');
   const [isTransitioning, setIsTransitioning] = useState(false);
   const [showRevealFlash, setShowRevealFlash] = useState(false);
@@ -87,7 +96,28 @@ export function TvPlayer({ quiz, onExit }: TvPlayerProps) {
   const warningTime = quiz.warningSeconds && quiz.warningSeconds > 0 ? quiz.warningSeconds : 10;
   const isUrgent = timeLeft <= warningTime && timeLeft > 0 && !isRevealed;
 
-  // Trigger celebration visual confetti (sem tocar som concorrente para preservar a vinheta da resposta certa)
+  // Separa automaticamente "(ENEM 2025 / Matemática)" da primeira linha do enunciado para economizar espaço vertical no telão!
+  const parsedStatement = useMemo(() => {
+    if (!currentQuestion?.statement) return { topicBadge: null, body: '' };
+    const raw = currentQuestion.statement.trim();
+    const firstLineMatch = raw.match(/^\(([^)]+)\)\s*\n+([\s\S]*)$/);
+    if (firstLineMatch) {
+      return {
+        topicBadge: firstLineMatch[1].trim(),
+        body: firstLineMatch[2].trim(),
+      };
+    }
+    return { topicBadge: null, body: raw };
+  }, [currentQuestion?.statement]);
+
+  // Verifica se as alternativas são curtas (ex: "500.", "I.", "V - F - V - F.") para usar Grid de 2 colunas e liberar espaço gigante para a imagem!
+  const areAlternativesShort = useMemo(() => {
+    if (!currentQuestion?.alternatives) return false;
+    const maxLen = Math.max(...currentQuestion.alternatives.map((a) => (a.text || '').length));
+    return maxLen <= 28;
+  }, [currentQuestion?.alternatives]);
+
+  // Trigger celebration visual confetti
   const triggerConfetti = useCallback(() => {
     try {
       confetti({
@@ -123,16 +153,14 @@ export function TvPlayer({ quiz, onExit }: TvPlayerProps) {
     }
   }, [quiz]);
 
-  // Intro Splash Screen: Smooth Entrance -> Stationary Hold -> High-Speed 3D Fly-Through
+  // Intro Splash Screen
   useEffect(() => {
     if (!showIntro) return;
 
-    // Phase 1: Play opening entrance chime
     if (quiz.soundEffects) {
       soundManager.playIntroChime();
     }
 
-    // Phase 3: Play cinematic whoosh as motion launches forward into the screen (~1550ms)
     const whooshTimer = setTimeout(() => {
       if (quiz.soundEffects) {
         soundManager.playIntroWhoosh();
@@ -152,13 +180,11 @@ export function TvPlayer({ quiz, onExit }: TvPlayerProps) {
     };
   }, [showIntro, quiz]);
 
-  // Finish entrance early (e.g. host clicks or presses Enter)
   const finishEntrance = useCallback(() => {
     setEntranceStep(999);
     setIsEntranceFinished(true);
   }, []);
 
-  // Advance step in step-by-step mode
   const advanceStep = useCallback(() => {
     const totalAlternatives = currentQuestion ? currentQuestion.alternatives.length : 4;
     const next = entranceStep + 1;
@@ -177,19 +203,18 @@ export function TvPlayer({ quiz, onExit }: TvPlayerProps) {
     isRevealedRef.current = false;
     setIsRevealed(false);
     setZoomedImage(null);
+    setRightPanelMode('split');
+    setShowExplanationBanner(true);
     setIsEntranceFinished(false);
     setEntranceStep(0);
     hasTriggeredFinalCountdownRef.current = false;
 
-    // Interrompe qualquer efeito sonoro da questão anterior (ex: vinheta de resposta certa)
     soundManager.stopSfx();
 
-    // Toca o áudio de início de cada pergunta (vinheta da pergunta)
     if (quiz.soundEffects !== false) {
       soundManager.playQuestionStart(quiz.questionStartSoundUrl || undefined);
     }
 
-    // Restaura o volume normal e retoma a música de fundo para a nova pergunta
     soundManager.resumeBackgroundMusic();
 
     if (!skipMusic && quiz.bgMusic && quiz.bgMusic !== 'none') {
@@ -215,11 +240,10 @@ export function TvPlayer({ quiz, onExit }: TvPlayerProps) {
 
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
-      // Mantém a música tocando continuamente entre a passagem de perguntas
     };
   }, [currentIndex, questions.length, resetQuestionState]);
 
-  // Pré-carregar áudios locais do Show do Milhão e parar ao desmontar
+  // Pré-carregar áudios locais e parar ao desmontar
   useEffect(() => {
     soundManager.preloadCommonAudios();
     return () => {
@@ -233,7 +257,7 @@ export function TvPlayer({ quiz, onExit }: TvPlayerProps) {
     onExit();
   }, [onExit]);
 
-  // Orchestrate Entrance Effects on question load or effect change (only after intro)
+  // Orchestrate Entrance Effects
   useEffect(() => {
     if (showIntro || isEntranceFinished || isCompleted || questions.length === 0) return;
 
@@ -241,7 +265,6 @@ export function TvPlayer({ quiz, onExit }: TvPlayerProps) {
     let intervalId: NodeJS.Timeout | null = null;
 
     if (activeEffect === 'normal') {
-      // Normal: immediate smooth cascading entrance, timer begins after ~650ms
       const frameTimer = setTimeout(() => {
         setEntranceStep(1);
       }, 50);
@@ -255,17 +278,15 @@ export function TvPlayer({ quiz, onExit }: TvPlayerProps) {
         if (timeoutId) clearTimeout(timeoutId);
       };
     } else if (activeEffect === 'delay') {
-      // Delay: Statement is shown at step 0; alternatives emerge at step 1 after delay; timer starts at step 2
       timeoutId = setTimeout(() => {
-        setEntranceStep(1); // alternatives slide up
+        setEntranceStep(1);
         if (quiz.soundEffects !== false) soundManager.playTickingSound();
 
         timeoutId = setTimeout(() => {
-          setIsEntranceFinished(true); // timer begins!
+          setIsEntranceFinished(true);
         }, 900);
       }, 1900);
     } else if (activeEffect === 'step_by_step') {
-      // Step-by-step: Statement is step 0. Each alternative slides in from the right one by one.
       const totalSteps = currentQuestion ? currentQuestion.alternatives.length : 4;
 
       let step = 0;
@@ -276,7 +297,7 @@ export function TvPlayer({ quiz, onExit }: TvPlayerProps) {
           if (quiz.soundEffects !== false) soundManager.playTickingSound();
         } else {
           clearInterval(intervalId!);
-          setIsEntranceFinished(true); // All alternatives presented -> timer starts!
+          setIsEntranceFinished(true);
         }
       }, 1100);
     }
@@ -287,30 +308,27 @@ export function TvPlayer({ quiz, onExit }: TvPlayerProps) {
     };
   }, [currentIndex, activeEffect, isEntranceFinished, isCompleted, questions.length, currentQuestion, quiz.soundEffects, showIntro]);
 
-  // Reveal answer with animation, studio flash and celebration
+  // Reveal answer
   const handleReveal = useCallback((isTimeUp = false) => {
     if (isRevealedRef.current) return;
     isRevealedRef.current = true;
     setIsRevealed(true);
+    setRightPanelMode('split'); // Garante que as alternativas apareçam ao revelar
 
-    // Pausar os áudios de fundo e contagem/ticking imediatamente para dar destaque total à resposta certa
     soundManager.stopSfx();
     soundManager.pauseBackgroundMusic();
 
-    // Trigger cinematic studio reveal flash (Plano 5)
     setShowRevealFlash(true);
     setTimeout(() => setShowRevealFlash(false), 450);
 
     if (quiz.soundEffects !== false) {
-      // O áudio da resposta certa toca SEMPRE que a resposta for exibida (seja manualmente ou após o tempo esgotar)
       soundManager.playCorrectAnswer(quiz.correctSoundUrl || undefined);
     }
 
-    // Dispara a celebração visual com confetes
     triggerConfetti();
   }, [quiz, triggerConfetti]);
 
-  // Countdown timer loop - purely decrements timeLeft every second
+  // Countdown timer loop
   useEffect(() => {
     if (!isEntranceFinished || isPaused || isRevealed || isCompleted || questions.length === 0) {
       if (timerRef.current) clearInterval(timerRef.current);
@@ -332,13 +350,12 @@ export function TvPlayer({ quiz, onExit }: TvPlayerProps) {
     };
   }, [isEntranceFinished, isPaused, isRevealed, isCompleted, questions.length]);
 
-  // Audio & Reveal side-effects driven safely by timeLeft changes in effect phase
+  // Audio & Reveal side-effects
   useEffect(() => {
     if (!isEntranceFinished || isPaused || isCompleted || questions.length === 0) {
       return;
     }
 
-    // Tempo esgotado -> Revela a resposta
     if (timeLeft === 0 && !isRevealed) {
       handleReveal(true);
       return;
@@ -346,7 +363,6 @@ export function TvPlayer({ quiz, onExit }: TvPlayerProps) {
 
     if (isRevealed) return;
 
-    // Dispara contagem final e zera a música de fundo exatamente na marca configurada (ex: aos 10s)
     if (timeLeft <= warningTime && !hasTriggeredFinalCountdownRef.current) {
       hasTriggeredFinalCountdownRef.current = true;
       soundManager.zeroBackgroundMusic();
@@ -355,7 +371,6 @@ export function TvPlayer({ quiz, onExit }: TvPlayerProps) {
       }
     }
 
-    // Durante os segundos finais sem áudio de contagem, toca o batimento cardíaco; caso contrário, toca o tick a cada segundo
     if (timeLeft <= warningTime) {
       if (!quiz.countdownSoundUrl && quiz.soundEffects !== false) {
         soundManager.playHeartbeat();
@@ -367,13 +382,14 @@ export function TvPlayer({ quiz, onExit }: TvPlayerProps) {
     }
   }, [timeLeft, isEntranceFinished, isPaused, isRevealed, isCompleted, questions.length, quiz, warningTime, handleReveal]);
 
-  // Next Question with Broadcast TV Transition (Plano 5)
+  // Next Question
   const handleNext = useCallback(() => {
+    if (isTransitioning) return;
     if (currentIndex < totalQuestions - 1) {
       setNavDirection('next');
       setIsTransitioning(true);
-      setTimeout(() => setIsTransitioning(false), 420);
-      setCurrentIndex(prev => prev + 1);
+      setTimeout(() => setIsTransitioning(false), 380);
+      setCurrentIndex((prev) => prev + 1);
     } else {
       setIsCompleted(true);
       soundManager.stopBackgroundMusic();
@@ -382,19 +398,19 @@ export function TvPlayer({ quiz, onExit }: TvPlayerProps) {
         triggerConfetti();
       }
     }
-  }, [currentIndex, totalQuestions, quiz.soundEffects, quiz.confettiSoundUrl, triggerConfetti]);
+  }, [currentIndex, totalQuestions, quiz.soundEffects, quiz.confettiSoundUrl, triggerConfetti, isTransitioning]);
 
-  // Previous Question with Broadcast TV Transition (Plano 5)
+  // Previous Question
   const handlePrev = useCallback(() => {
+    if (isTransitioning) return;
     if (currentIndex > 0) {
       setNavDirection('prev');
       setIsTransitioning(true);
-      setTimeout(() => setIsTransitioning(false), 420);
-      setCurrentIndex(prev => prev - 1);
+      setTimeout(() => setIsTransitioning(false), 380);
+      setCurrentIndex((prev) => prev - 1);
     }
-  }, [currentIndex]);
+  }, [currentIndex, isTransitioning]);
 
-  // Restart Quiz
   const handleRestart = () => {
     setIsCompleted(false);
     setCurrentIndex(0);
@@ -402,18 +418,22 @@ export function TvPlayer({ quiz, onExit }: TvPlayerProps) {
     resetQuestionState(0, false);
   };
 
-  // Toggle Fullscreen
   const toggleFullscreen = () => {
     if (!document.fullscreenElement) {
-      document.documentElement.requestFullscreen().catch(() => { });
-      setIsFullscreen(true);
+      document.documentElement.requestFullscreen().catch(() => {});
     } else {
-      document.exitFullscreen().catch(() => { });
-      setIsFullscreen(false);
+      document.exitFullscreen().catch(() => {});
     }
   };
 
-  // Toggle Mute
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      setIsFullscreen(!!document.fullscreenElement);
+    };
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
+  }, []);
+
   const handleToggleMute = () => {
     const muted = soundManager.toggleMute();
     setIsMuted(muted);
@@ -426,7 +446,6 @@ export function TvPlayer({ quiz, onExit }: TvPlayerProps) {
         return;
       }
 
-      // If intro is active, any confirmation key skips directly to quiz
       if (showIntro) {
         if (e.code === 'Space' || e.code === 'Enter' || e.code === 'Escape') {
           e.preventDefault();
@@ -447,7 +466,7 @@ export function TvPlayer({ quiz, onExit }: TvPlayerProps) {
           } else if (isRevealed) {
             handleNext();
           } else {
-            setIsPaused(prev => !prev);
+            setIsPaused((prev) => !prev);
           }
           break;
         case 'KeyR':
@@ -475,21 +494,33 @@ export function TvPlayer({ quiz, onExit }: TvPlayerProps) {
           e.preventDefault();
           toggleFullscreen();
           break;
-        case 'KeyT':
-          e.preventDefault();
-          setIsLightMode(prev => !prev);
-          break;
         case 'KeyZ':
           e.preventDefault();
           if (currentQuestion?.imageUrl) {
-            setZoomedImage(prev => prev ? null : currentQuestion.imageUrl || null);
+            setZoomedImage((prev) => (prev ? null : currentQuestion.imageUrl || null));
           }
+          break;
+        case 'KeyI':
+          e.preventDefault();
+          if (currentQuestion?.imageUrl) {
+            setRightPanelMode((prev) => (prev === 'split' ? 'image_focus' : 'split'));
+          }
+          break;
+        case 'Equal':
+        case 'NumpadAdd':
+          e.preventDefault();
+          setFontScaleOffset((prev) => Math.min(4, prev + 1));
+          break;
+        case 'Minus':
+        case 'NumpadSubtract':
+          e.preventDefault();
+          setFontScaleOffset((prev) => Math.max(-2, prev - 1));
           break;
         case 'Escape':
           if (zoomedImage) {
             setZoomedImage(null);
-          } else if (isFullscreen) {
-            setIsFullscreen(false);
+          } else if (rightPanelMode === 'image_focus') {
+            setRightPanelMode('split');
           }
           break;
       }
@@ -497,53 +528,58 @@ export function TvPlayer({ quiz, onExit }: TvPlayerProps) {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [showIntro, skipIntro, isEntranceFinished, activeEffect, advanceStep, finishEntrance, isRevealed, handleNext, handleReveal, handlePrev, isFullscreen, currentQuestion, zoomedImage]);
+  }, [
+    showIntro,
+    skipIntro,
+    isEntranceFinished,
+    activeEffect,
+    advanceStep,
+    finishEntrance,
+    isRevealed,
+    handleNext,
+    handleReveal,
+    handlePrev,
+    currentQuestion,
+    zoomedImage,
+    rightPanelMode,
+  ]);
 
   if (questions.length === 0) {
     return (
-      <div className={`min-h-screen flex flex-col items-center justify-center p-6 text-center ${isLightMode ? 'bg-slate-100 text-slate-800' : 'bg-slate-950 text-white'}`}>
+      <div className="min-h-screen flex flex-col items-center justify-center p-6 text-center bg-slate-950 text-white">
         <HelpCircle className="h-16 w-16 text-amber-500 mb-4 animate-bounce" />
         <h2 className="text-2xl font-bold mb-2">Nenhuma questão cadastrada nesta revisão</h2>
-        <p className="text-sm text-slate-500 max-w-md mb-6">
-          Cadastre perguntas e alternativas antes de iniciar a apresentação na TV.
-        </p>
-        <Button size="lg" onClick={handleExitQuiz}>
+        <Button size="lg" onClick={handleExitQuiz} className="mt-4">
           Voltar ao Painel
         </Button>
       </div>
     );
   }
 
-  // Final celebration screen
   if (isCompleted) {
     return (
-      <div className={`min-h-screen flex flex-col items-center justify-center p-8 text-center relative overflow-hidden ${isLightMode
-          ? 'bg-gradient-to-b from-blue-50 via-white to-slate-100 text-slate-900'
-          : 'bg-gradient-to-b from-slate-950 via-indigo-950 to-slate-950 text-white'
-        }`}>
-        <div className="relative z-10 max-w-2xl space-y-6 animate-in fade-in zoom-in duration-500">
-          <div className="inline-flex p-5 rounded-full bg-primary/10 border-2 border-primary shadow-xl">
-            <Trophy className="h-20 w-20 text-primary" />
+      <div className="min-h-screen flex flex-col items-center justify-center p-8 text-center relative overflow-hidden bg-gradient-to-b from-slate-950 via-indigo-950 to-slate-950 text-white">
+        <div className="relative z-10 max-w-3xl space-y-6 animate-in fade-in zoom-in duration-500">
+          <div className="inline-flex p-6 rounded-full bg-amber-500/15 border-2 border-amber-400 shadow-[0_0_50px_rgba(245,158,11,0.5)]">
+            <Trophy className="h-24 w-24 text-amber-400" />
           </div>
-
-          <div className="space-y-2">
-            <Badge variant="secondary" className="text-xs px-3 py-1 uppercase tracking-widest">
-              Revisão ENEM Concluída
+          <div className="space-y-3">
+            <Badge variant="secondary" className="text-sm px-4 py-1 uppercase tracking-widest bg-cyan-500/20 text-cyan-300 border-cyan-400/40">
+              Aulão ENEM Concluído
             </Badge>
-            <h1 className="text-4xl md:text-5xl font-black tracking-tight">
+            <h1 className="text-5xl md:text-6xl font-black tracking-tight text-white">
               Parabéns a Toda a Turma!
             </h1>
-            <p className="text-base text-slate-600 dark:text-slate-300 max-w-lg mx-auto">
-              Todas as {totalQuestions} questões foram debatidas com sucesso.
+            <p className="text-xl text-slate-300 max-w-xl mx-auto">
+              Todas as {totalQuestions} questões foram debatidas com sucesso. Excelente prova a todos!
             </p>
           </div>
-
-          <div className="flex flex-wrap items-center justify-center gap-3 pt-4">
-            <Button size="lg" onClick={handleRestart} className="gap-2 font-medium">
-              <RotateCcw className="h-4 w-4" /> Recomeçar Simulado
+          <div className="flex flex-wrap items-center justify-center gap-4 pt-6">
+            <Button size="lg" onClick={handleRestart} className="gap-2 font-bold text-lg px-6 py-6 bg-[#00E5FF] text-slate-950 hover:bg-cyan-300">
+              <RotateCcw className="h-5 w-5" /> Recomeçar Simulado
             </Button>
-            <Button variant="outline" size="lg" onClick={handleExitQuiz} className="gap-2">
-              <X className="h-4 w-4" /> Sair para o Painel
+            <Button variant="outline" size="lg" onClick={handleExitQuiz} className="gap-2 text-lg px-6 py-6 border-slate-700 text-white">
+              <X className="h-5 w-5" /> Sair para o Painel
             </Button>
           </div>
         </div>
@@ -551,338 +587,290 @@ export function TvPlayer({ quiz, onExit }: TvPlayerProps) {
     );
   }
 
-  // Badges for alternatives (a, b, c, d, e) - Electric Cyan / Gold TV Studio styling
+  // Estilos das letras A, B, C, D, E - Super visíveis de longe no painel de LED
   const getBadgeStyle = (alt: Alternative) => {
     if (isRevealed) {
       if (alt.isCorrect) {
-        return 'bg-white text-emerald-900 shadow-[0_0_15px_rgba(255,255,255,0.8)] font-black ring-2 ring-emerald-300 scale-110 transition-transform duration-300';
+        return 'bg-white text-emerald-950 shadow-[0_0_20px_rgba(255,255,255,0.95)] font-black ring-4 ring-emerald-300 scale-110 transition-transform duration-300';
       }
-      return 'opacity-20 bg-slate-800 text-slate-500 border-transparent transition-opacity duration-300';
+      return 'opacity-30 bg-slate-900 text-slate-500 border-transparent';
     }
-
-    return 'bg-gradient-to-br from-[#00E5FF] to-cyan-500 text-slate-950 font-black shadow-[0_0_12px_rgba(0,229,255,0.6)] ring-1 ring-cyan-200';
+    return 'bg-[#00E5FF] text-slate-950 font-black shadow-[0_0_15px_rgba(0,229,255,0.8)] ring-2 ring-white/80';
   };
 
-  // Card styles for alternatives: Deep Violet & Navy Blue game show styling (matching user image)
+  // Estilos dos Cards das Alternativas - Alto contraste para LED
   const getAlternativeCardStyles = (alt: Alternative) => {
     if (isRevealed) {
       if (alt.isCorrect) {
-        return 'bg-gradient-to-r from-emerald-600 via-teal-500 to-emerald-600 text-white border-2 border-emerald-300 shadow-[0_0_35px_rgba(16,185,129,0.7)] font-bold ring-4 ring-emerald-400/50 scale-[1.02] cursor-default transition-all duration-500';
+        return 'bg-gradient-to-r from-emerald-600 via-emerald-500 to-teal-600 text-white border-[3px] border-white shadow-[0_0_40px_rgba(16,185,129,0.9)] font-black ring-4 ring-emerald-400/70 scale-[1.01] z-10';
       } else {
-        return 'opacity-20 bg-[#081024]/80 border-2 border-slate-800 text-slate-500 scale-[0.99] cursor-default transition-all duration-500';
+        return 'opacity-25 bg-[#060c1e]/90 border border-slate-800 text-slate-400';
       }
     }
-
-    return 'bg-gradient-to-r from-[#22104e]/95 via-[#1b1446]/95 to-[#0e193a]/95 border-2 border-indigo-400/40 hover:border-[#00E5FF] text-white shadow-md hover:shadow-[0_0_18px_rgba(0,229,255,0.3)] cursor-default transition-all duration-200';
+    return 'bg-gradient-to-r from-[#170e3d] via-[#12133d] to-[#0b1736] border-2 border-cyan-400/55 hover:border-[#00E5FF] text-white shadow-lg';
   };
 
-  // Auto-calculated statement font size so questions always fit 100% on screen without scrolling or overflow-hidden
-  // Auto-calculated statement font size so questions stretch and fill the screen without scrolling
-  const getStatementFontClasses = (text: string) => {
+  // Cálculo dinâmico em PIXELS/VH para o enunciado aproveitar 100% do card sem ficar pequeno no telão LED
+  const getStatementStyle = (text: string): React.CSSProperties => {
     const len = (text || '').length;
-    if (len < 120) {
-      return 'text-xl sm:text-2xl md:text-3xl lg:text-[28px] xl:text-[32px] 2xl:text-[36px] leading-relaxed font-bold';
+    const hasImg = !!currentQuestion?.imageUrl;
+
+    // Base em pixels para TV 1080p escalando com viewport
+    let basePx = 28;
+    let lineHeight = 1.32;
+
+    if (len < 160) {
+      basePx = hasImg ? 38 : 42;
+      lineHeight = 1.25;
+    } else if (len < 280) {
+      basePx = hasImg ? 33 : 36;
+      lineHeight = 1.28;
+    } else if (len < 420) {
+      basePx = hasImg ? 29 : 31;
+      lineHeight = 1.3;
+    } else if (len < 580) {
+      basePx = hasImg ? 26 : 28;
+      lineHeight = 1.3;
+    } else if (len < 750) {
+      basePx = hasImg ? 23.5 : 25;
+      lineHeight = 1.28;
+    } else if (len < 920) {
+      basePx = 22;
+      lineHeight = 1.26;
+    } else {
+      basePx = 20;
+      lineHeight = 1.24;
     }
-    if (len < 260) {
-      return 'text-lg sm:text-xl md:text-2xl lg:text-[23px] xl:text-[26px] 2xl:text-[29px] leading-relaxed font-semibold';
-    }
-    if (len < 450) {
-      return 'text-base sm:text-lg md:text-xl lg:text-[20px] xl:text-[22px] 2xl:text-[24px] leading-relaxed font-medium';
-    }
-    return 'text-sm sm:text-base md:text-lg lg:text-[17px] xl:text-[19px] 2xl:text-[21px] leading-normal font-medium';
+
+    const finalPx = Math.max(16, basePx + fontScaleOffset * 2.5);
+
+    return {
+      fontSize: `clamp(16px, ${finalPx * 0.052}vw + ${finalPx * 0.45}px, ${finalPx + 10}px)`,
+      lineHeight,
+    };
   };
 
-  // Alternative font size and badge - responsive and prominent
-  const altFontClasses = 'text-base sm:text-lg md:text-xl lg:text-[21px] xl:text-[23px] 2xl:text-[25px] font-bold leading-snug';
-  const altBadgeClasses = 'w-9 h-9 sm:w-10 sm:h-10 md:w-11 md:h-11 lg:w-12 lg:h-12 text-sm sm:text-base md:text-lg lg:text-xl font-black shrink-0 mr-3 sm:mr-3.5';
+  // Cálculo dinâmico de tamanho da fonte das alternativas
+  const getAlternativeTextStyle = (): React.CSSProperties => {
+    const maxAltLen = Math.max(...currentQuestion.alternatives.map((a) => (a.text || '').length));
+    let basePx = 24;
+
+    if (maxAltLen <= 25) {
+      basePx = 30;
+    } else if (maxAltLen <= 65) {
+      basePx = 25;
+    } else if (maxAltLen <= 110) {
+      basePx = 22;
+    } else {
+      basePx = 19.5;
+    }
+
+    const finalPx = Math.max(15, basePx + fontScaleOffset * 2);
+    return {
+      fontSize: `clamp(15px, ${finalPx * 0.048}vw + ${finalPx * 0.45}px, ${finalPx + 8}px)`,
+      lineHeight: 1.22,
+    };
+  };
+
+  // Layout de colunas: se a questão tiver imagem E enunciado curto (ex: Inglês/Química), dá mais largura para a direita!
+  const isVisualHeavyQuestion =
+    !!currentQuestion.imageUrl && (parsedStatement.body.length < 260 || rightPanelMode === 'image_focus');
 
   return (
-    <div
-      className="relative h-screen h-[100dvh] max-h-screen max-h-[100dvh] overflow-hidden w-full flex flex-col justify-between select-none bg-gradient-to-br from-[#051124] via-[#091b38] to-[#040e20] text-slate-100 border-[3px] border-[#00E5FF]/40 shadow-[0_0_40px_rgba(0,229,255,0.2)]"
-    >
-      {/* BACKGROUND IMAGE (milhao.png) with studio darkening overlay for broadcast contrast */}
+    <div className="relative h-screen h-[100dvh] max-h-screen max-h-[100dvh] overflow-hidden w-full flex flex-col justify-between select-none bg-[#040b1a] text-white border-2 border-[#00E5FF]/50">
+      {/* BACKGROUND ESCURO DE ALTO CONTRASTE PARA PAINEL LED (evita lavar a letra branca) */}
       <div className="pointer-events-none absolute inset-0 z-0 overflow-hidden">
         <img
           src="/milhao.png"
-          alt="Show do Milhão Fundo"
-          className="w-full h-full object-cover object-center opacity-30 filter brightness-90 contrast-110"
+          alt=""
+          className="w-full h-full object-cover object-center opacity-15 filter brightness-75 contrast-125"
         />
-        <div className="absolute inset-0 bg-gradient-to-b from-[#051124]/90 via-[#091b38]/85 to-[#040e20]/95 mix-blend-multiply" />
+        <div className="absolute inset-0 bg-gradient-to-b from-[#040b1a]/95 via-[#07132c]/90 to-[#030917]/95" />
       </div>
 
-      {/* Top Electric Cyan Accent Line matching attached reference image */}
-      <div className="absolute top-0 left-0 right-0 h-1 z-50 bg-gradient-to-r from-[#00E5FF] via-cyan-300 to-[#00E5FF] shadow-[0_0_16px_rgba(0,229,255,0.9)]" />
-
-      {/* STUDIO BACKGROUND SEARCHLIGHT BEAMS (Broadcast Depth & Atmosphere) */}
-      <div className="pointer-events-none absolute -top-40 -left-40 w-[450px] h-[850px] bg-gradient-to-br from-cyan-400/10 via-indigo-600/5 to-transparent blur-3xl anim-studio-beam-left z-0" />
-      <div className="pointer-events-none absolute -top-40 -right-40 w-[450px] h-[850px] bg-gradient-to-bl from-blue-500/10 via-purple-600/5 to-transparent blur-3xl anim-studio-beam-right z-0" />
-      <div className="pointer-events-none absolute bottom-0 left-0 right-0 h-36 bg-gradient-to-t from-cyan-500/5 to-transparent z-0" />
-
-      {/* REVEAL CINEMATIC FLASH BURST (Plano 5) */}
-      {showRevealFlash && (
-        <div className="pointer-events-none fixed inset-0 z-50 bg-gradient-to-b from-white/45 via-cyan-200/35 to-transparent anim-reveal-flash" />
-      )}
-
-      {/* TV WIPE STREAK OVERLAY (Plano 5) */}
-      {isTransitioning && (
-        <div className="pointer-events-none fixed inset-0 z-50 overflow-hidden">
-          <div className="w-full h-full bg-gradient-to-r from-transparent via-[#00E5FF]/30 to-transparent anim-tv-wipe" />
-        </div>
-      )}
-
-      {/* TOP TIME BAR: drains smoothly from 15s to 0s; turns amber/red with shimmer in last 10s */}
+      {/* BARRA DE TEMPO NO TOPO (Mais grossa para ser vista do fundo do salão) */}
       {!showIntro && (
-        <div className="absolute top-1 left-0 right-0 h-1.5 z-40 bg-slate-900/80 overflow-hidden">
+        <div className="relative w-full h-2.5 z-40 bg-slate-900 overflow-hidden shrink-0">
           <div
-            className={`h-full origin-left transition-[width,background-color] duration-1000 ease-linear ${isRevealed
-                ? 'bg-emerald-500'
+            className={`h-full origin-left transition-[width,background-color] duration-1000 ease-linear ${
+              isRevealed
+                ? 'bg-emerald-400 shadow-[0_0_15px_rgba(16,185,129,0.9)]'
                 : timeLeft <= 3
-                  ? 'bg-gradient-to-r from-red-500 via-rose-400 to-red-500 anim-bar-shimmer shadow-[0_0_12px_rgba(239,68,68,0.8)]'
+                  ? 'bg-gradient-to-r from-red-600 via-rose-400 to-red-600 shadow-[0_0_20px_rgba(239,68,68,1)]'
                   : isUrgent
-                    ? 'bg-gradient-to-r from-amber-500 via-yellow-300 to-orange-500 anim-bar-shimmer shadow-[0_0_12px_rgba(245,158,11,0.8)]'
-                    : 'bg-gradient-to-r from-cyan-400 via-[#00E5FF] to-blue-500 shadow-[0_0_12px_rgba(0,229,255,0.8)]'
-              }`}
+                    ? 'bg-gradient-to-r from-amber-500 via-yellow-300 to-orange-500 shadow-[0_0_16px_rgba(245,158,11,0.9)]'
+                    : 'bg-gradient-to-r from-cyan-400 via-[#00E5FF] to-blue-500 shadow-[0_0_15px_rgba(0,229,255,0.9)]'
+            }`}
             style={{ width: `${isEntranceFinished ? Math.max(0, (timeLeft / questionDuration) * 100) : 100}%` }}
           />
         </div>
       )}
 
-      {/* Warning Screen Edge Pulse during the final 10 seconds */}
+      {/* PULSO DE BORDA NOS SEGUNDOS FINAIS (Não cobre nenhuma alternativa!) */}
       {!showIntro && isEntranceFinished && !isRevealed && !isPaused && isUrgent && (
-        <div className="pointer-events-none fixed inset-0 z-30 shadow-[inset_0_0_120px_rgba(239,68,68,0.3)] animate-pulse" />
+        <div className="pointer-events-none fixed inset-0 z-30 border-[6px] border-amber-500/80 shadow-[inset_0_0_90px_rgba(239,68,68,0.45)] animate-pulse" />
       )}
 
-      {/* FINAL COUNTDOWN BUBBLE (last warningTime seconds): Prominent corner alert that commands attention on TV */}
-      {!showIntro && isEntranceFinished && !isRevealed && !isPaused && timeLeft <= warningTime && timeLeft > 0 && (
-        <div className="pointer-events-none fixed bottom-20 right-6 sm:right-10 z-40 flex flex-col items-center justify-center">
-          <span className="text-[10px] sm:text-xs font-black uppercase tracking-widest text-amber-300 drop-shadow-[0_0_10px_rgba(245,158,11,0.9)] mb-1.5 animate-pulse">
-            {timeLeft <= 3 ? '🚨 TEMPO ESGOTANDO!' : '⚡ CONTAGEM FINAL'}
-          </span>
-          <div className="relative flex items-center justify-center w-24 h-24 sm:w-32 sm:h-32">
-            <span className={`absolute inset-0 rounded-full anim-final-ring ${timeLeft <= 3 ? 'bg-red-500/50' : 'bg-amber-400/40'}`} />
-            <span className={`absolute -inset-2 rounded-full animate-ping opacity-40 ${timeLeft <= 3 ? 'bg-red-500' : 'bg-amber-400'}`} />
-            <div
-              className={`relative w-full h-full rounded-full flex items-center justify-center shadow-[0_0_40px_rgba(239,68,68,0.7)] border-4 ${timeLeft <= 3
-                  ? 'bg-gradient-to-br from-red-600 via-rose-600 to-red-700 border-white text-white'
-                  : 'bg-gradient-to-br from-amber-500 via-orange-500 to-red-500 border-white text-white'
-                }`}
-            >
-              <span key={timeLeft} className="anim-final-num text-5xl sm:text-7xl font-black text-white tabular-nums drop-shadow-[0_4px_16px_rgba(0,0,0,0.8)]">
-                {timeLeft}
-              </span>
-            </div>
-          </div>
-        </div>
+      {/* REVEAL FLASH */}
+      {showRevealFlash && (
+        <div className="pointer-events-none fixed inset-0 z-50 bg-white/30 animate-out fade-out duration-500" />
       )}
 
-      {/* TOP HEADER: ALL-IN-ONE BROADCAST CONTROL BAR */}
-      <header
-        className="relative z-20 px-2 sm:px-3 md:px-4 py-1.5 sm:py-2 border-b border-cyan-500/30 bg-[#06142e]/95 backdrop-blur-md shrink-0 shadow-xl"
-      >
-        <div className="w-full flex items-center justify-between gap-2 sm:gap-4 lg:gap-6">
-
-          {/* LEFT: Prominent Show do Milhão TV Logo + Favoo + Quiz Info */}
-          <div className="flex items-center gap-2.5 sm:gap-4 shrink-0">
+      {/* TOP HEADER ULTRA-COMPACTO: Economiza até 90px de altura vertical para o telão! */}
+      <header className="relative z-20 shrink-0 border-b border-cyan-500/30 bg-[#051026]/95 px-3 py-1.5 shadow-lg">
+        <div className="w-full flex items-center justify-between gap-2">
+          {/* ESQUERDA: Número da Questão Gigante + Matéria + Logos Compactas */}
+          <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
             <img
               src="/show_milhao-cropped.png"
               alt="Show do Milhão"
-              className="h-14 sm:h-16 md:h-20 lg:h-24 xl:h-28 w-auto object-contain drop-shadow-[0_4px_24px_rgba(255,215,0,0.45)] transition-transform hover:scale-105"
+              className="h-9 sm:h-11 w-auto object-contain drop-shadow-[0_2px_12px_rgba(255,215,0,0.4)] shrink-0"
               onError={(e) => {
-                (e.target as HTMLImageElement).src = "/show_milhao.png";
+                (e.target as HTMLImageElement).src = '/show_milhao.png';
               }}
             />
 
-            {/* Favoo Institutional Logo */}
-            <div className="hidden lg:flex items-center px-2.5 py-1 rounded-xl bg-white/95 shadow-md border border-cyan-400/40 shrink-0">
-              <img
-                src="/logo-cropped.png"
-                alt="Favoo"
-                className="h-6 sm:h-7 md:h-8 w-auto max-w-[120px] object-contain"
-                onError={(e) => {
-                  (e.target as HTMLImageElement).src = "/logo.png";
-                }}
-              />
+            {/* Badge de Questão de Alto Impacto para o Auditório */}
+            <div className="flex items-center gap-2 bg-[#121c42] border-2 border-[#00E5FF] px-3 py-1 rounded-xl shadow-[0_0_15px_rgba(0,229,255,0.3)]">
+              <span className="text-xs sm:text-sm font-black uppercase tracking-wider text-[#00E5FF]">
+                QUESTÃO
+              </span>
+              <span className="text-2xl sm:text-3xl font-black text-white font-mono leading-none">
+                {String(currentIndex + 1).padStart(2, '0')}
+              </span>
+              <span className="text-xs font-bold text-slate-300 border-l border-cyan-500/40 pl-2">
+                /{totalQuestions}
+              </span>
             </div>
 
-            <div className="hidden sm:flex flex-col justify-center min-w-0">
-              <span className="font-black text-sm md:text-base lg:text-lg text-white tracking-tight truncate max-w-[160px] md:max-w-xs drop-shadow">
-                {quiz.title}
+            {/* Badge da Disciplina / Ano extraído automaticamente do enunciado */}
+            {parsedStatement.topicBadge && (
+              <div className="hidden md:flex items-center bg-amber-400 text-slate-950 font-black px-3.5 py-1 rounded-xl text-sm lg:text-base uppercase tracking-wide shadow-md shrink-0">
+                {parsedStatement.topicBadge}
+              </div>
+            )}
+          </div>
+
+          {/* CENTRO: CRONÔMETRO GIGANTE + CONTAGEM FINAL INTEGRADA (Nunca tapa a letra E!) */}
+          <div className="flex items-center justify-center shrink-0">
+            <div
+              className={`flex items-center gap-2.5 px-4 py-1 rounded-full border-2 transition-all duration-300 ${
+                isRevealed
+                  ? 'bg-emerald-950 border-emerald-400 text-emerald-300 shadow-[0_0_25px_rgba(16,185,129,0.5)]'
+                  : isPaused
+                    ? 'bg-amber-950 border-amber-400 text-amber-300'
+                    : timeLeft <= 3
+                      ? 'bg-red-600 border-white text-white scale-110 shadow-[0_0_35px_rgba(239,68,68,0.95)] animate-bounce'
+                      : isUrgent
+                        ? 'bg-amber-500 border-white text-slate-950 scale-105 shadow-[0_0_30px_rgba(245,158,11,0.9)]'
+                        : 'bg-[#071f40] border-[#00E5FF] text-[#00E5FF] shadow-[0_0_20px_rgba(0,229,255,0.3)]'
+              }`}
+            >
+              <Clock className="h-5 w-5 sm:h-6 sm:w-6 shrink-0" />
+              <span className="font-mono font-black text-2xl sm:text-3xl md:text-4xl tabular-nums leading-none tracking-tight">
+                {String(timeLeft).padStart(2, '0')}s
               </span>
-              {quiz.category && (
-                <span className="text-[10px] md:text-xs font-bold text-[#00E5FF] uppercase tracking-wider drop-shadow-[0_0_8px_rgba(0,229,255,0.6)]">
-                  {quiz.category}
+              {isUrgent && !isRevealed && (
+                <span className="hidden sm:inline text-xs font-black uppercase px-2 py-0.5 rounded bg-black/25 text-white animate-pulse">
+                  {timeLeft <= 3 ? 'FINAL!' : 'ATENÇÃO'}
                 </span>
               )}
             </div>
           </div>
 
-          {/* CENTER: HERO BROADCAST CRONÔMETRO (PLANO 2) - COMMANDING & ULTRA VISIBLE */}
-          <div className="flex-1 flex items-center justify-center min-w-0 px-1 sm:px-2">
-            <div
-              className={`relative flex items-center gap-2 sm:gap-3.5 px-3 sm:px-5 py-1 sm:py-1.5 rounded-2xl md:rounded-full border-2 transition-all duration-300 shadow-2xl ${isRevealed
-                  ? 'bg-emerald-950/90 border-emerald-400 text-emerald-300 shadow-[0_0_30px_rgba(16,185,129,0.5)] ring-2 ring-emerald-400/40'
-                  : isPaused
-                    ? 'bg-[#291e06]/95 border-amber-400 text-amber-300 shadow-[0_0_20px_rgba(245,158,11,0.4)]'
-                    : timeLeft <= 3
-                      ? 'bg-red-950/95 border-red-500 text-white anim-timer-red shadow-[0_0_40px_rgba(239,68,68,0.9)] ring-4 ring-red-500/60'
-                      : isUrgent
-                        ? 'bg-[#2b1605]/95 border-amber-400 text-amber-300 anim-timer-amber shadow-[0_0_35px_rgba(245,158,11,0.8)] ring-2 ring-amber-400/50'
-                        : 'bg-[#061e3d]/90 border-cyan-400/80 text-[#00E5FF] anim-timer-cyan shadow-[0_0_25px_rgba(0,229,255,0.35)] ring-1 ring-cyan-300/30'
-                }`}
-            >
-              {/* Radial Countdown Gauge */}
-              <div className="relative w-8 h-8 sm:w-10 sm:h-10 md:w-11 md:h-11 flex items-center justify-center shrink-0">
-                <svg className="w-full h-full -rotate-90 transform" viewBox="0 0 36 36">
-                  {/* Background track */}
-                  <circle
-                    cx="18"
-                    cy="18"
-                    r="14"
-                    stroke="currentColor"
-                    strokeWidth="3.2"
-                    fill="transparent"
-                    className="opacity-20"
-                  />
-                  {/* Active progress track */}
-                  <circle
-                    cx="18"
-                    cy="18"
-                    r="14"
-                    stroke="currentColor"
-                    strokeWidth="3.2"
-                    strokeDasharray={2 * Math.PI * 14}
-                    strokeDashoffset={
-                      2 * Math.PI * 14 * (1 - Math.max(0, Math.min(1, timeLeft / questionDuration)))
-                    }
-                    strokeLinecap="round"
-                    fill="transparent"
-                    className="transition-all duration-1000 ease-linear"
-                  />
-                </svg>
-                <Clock className={`absolute h-4 w-4 sm:h-5 sm:w-5 ${timeLeft <= 3 && !isRevealed ? 'animate-pulse text-white' : ''}`} />
-              </div>
-
-              {/* Big Digits Display */}
-              <div className="flex flex-col items-center sm:items-start justify-center leading-none">
-                <div className="flex items-baseline gap-1">
-                  <span
-                    key={timeLeft}
-                    className={`font-mono font-black tabular-nums tracking-tight drop-shadow-[0_2px_12px_rgba(0,0,0,0.8)] ${timeLeft <= 3 && !isRevealed
-                        ? 'text-2xl sm:text-3xl md:text-4xl text-white inline-block animate-in zoom-in-125 duration-200'
-                        : isUrgent && !isRevealed
-                          ? 'text-2xl sm:text-3xl md:text-4xl text-amber-300 inline-block animate-in zoom-in-110 duration-200'
-                          : 'text-2xl sm:text-3xl md:text-4xl text-[#00E5FF]'
-                      }`}
-                  >
-                    {String(timeLeft).padStart(2, '0')}
-                  </span>
-                  <span className="text-xs sm:text-sm font-black uppercase text-current/70">
-                    s
-                  </span>
-                </div>
-              </div>
-
-              {/* Stage Tension Status Label */}
-              <div className="hidden xl:flex flex-col justify-center pl-1 sm:pl-2 border-l border-current/25 leading-tight">
-                <span className="text-[10px] sm:text-xs font-black uppercase tracking-wider text-current drop-shadow">
-                  {isRevealed
-                    ? '✨ REVELADA'
-                    : isPaused
-                      ? '⏸️ PAUSADO'
-                      : !isEntranceFinished
-                        ? '🎬 ENTRADA'
-                        : timeLeft <= 3
-                          ? '🚨 FINAL'
-                          : '⏱️ CRONÔMETRO'}
-                </span>
-                <span className="text-[9px] font-bold opacity-75">
-                  {isRevealed
-                    ? 'Próxima (N / Enter)'
-                    : isPaused
-                      ? 'Espaço p/ Retomar'
-                      : !isEntranceFinished
-                        ? 'Enter p/ Iniciar'
-                        : `${questionDuration}s Limite`}
-                </span>
-              </div>
+          {/* DIREITA: CONTROLES DO APRESENTADOR + AJUSTE DE LETRA AO VIVO */}
+          <div className="flex items-center gap-1.5 shrink-0">
+            {/* Controle de Tamanho da Fonte ao Vivo para o Telão (- / +) */}
+            <div className="hidden sm:flex items-center bg-slate-900/90 border border-cyan-500/40 rounded-lg p-0.5 mr-1" title="Ajustar tamanho da letra no telão (Teclas - e +)">
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setFontScaleOffset((prev) => Math.max(-2, prev - 1))}
+                className="h-7 w-7 text-cyan-300 hover:text-white hover:bg-cyan-950"
+                title="Diminuir Letra (-)"
+              >
+                <ZoomOut className="h-3.5 w-3.5" />
+              </Button>
+              <span className="px-1.5 text-[11px] font-black text-white tabular-nums">
+                A{fontScaleOffset > 0 ? `+${fontScaleOffset}` : fontScaleOffset < 0 ? fontScaleOffset : ''}
+              </span>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setFontScaleOffset((prev) => Math.min(4, prev + 1))}
+                className="h-7 w-7 text-cyan-300 hover:text-white hover:bg-cyan-950"
+                title="Aumentar Letra (+)"
+              >
+                <ZoomIn className="h-3.5 w-3.5" />
+              </Button>
             </div>
-          </div>
 
-          {/* RIGHT: ALL PRESENTER CONTROLS & UTILITIES (UNIFIED IN TOP HEADER) */}
-          <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
-
-            {/* Entrance in progress shortcuts */}
-            {!isEntranceFinished ? (
-              <div className="flex items-center gap-1">
-                <Button
-                  variant="default"
-                  size="sm"
-                  onClick={finishEntrance}
-                  className="h-8 md:h-9 text-xs font-bold gap-1 bg-[#00E5FF] hover:bg-cyan-300 text-slate-950 shadow-[0_0_15px_rgba(0,229,255,0.6)] animate-pulse"
-                  title="Pular animação e iniciar contagem agora (Enter)"
-                >
-                  <Play className="h-3 w-3 fill-current" />
-                  <span className="hidden sm:inline">Iniciar Tempo</span>
-                </Button>
-
-                {activeEffect === 'step_by_step' && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={advanceStep}
-                    className="h-8 md:h-9 text-xs font-semibold gap-1 border-cyan-400/40 text-cyan-300 hover:bg-cyan-950/40"
-                    title="Avançar próxima alternativa (Espaço)"
-                  >
-                    <ArrowRightCircle className="h-3.5 w-3.5" />
-                    <span className="hidden sm:inline">Avançar</span>
-                  </Button>
-                )}
-              </div>
-            ) : (
-              /* Pause / Resume Button */
+            {/* Se tiver imagem, botão rápido para alternar Foco na Imagem vs Dividido */}
+            {currentQuestion.imageUrl && (
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => setIsPaused(prev => !prev)}
-                className="h-8 md:h-9 text-xs font-bold gap-1 border-cyan-500/40 bg-slate-900 text-cyan-300 hover:bg-cyan-950 hover:text-white shadow-xs"
-                title="Pausar / Retomar tempo (Espaço)"
+                onClick={() => setRightPanelMode((prev) => (prev === 'split' ? 'image_focus' : 'split'))}
+                className={`h-8 text-xs font-black gap-1 border-2 ${
+                  rightPanelMode === 'image_focus'
+                    ? 'bg-[#00E5FF] text-slate-950 border-white shadow-[0_0_15px_rgba(0,229,255,0.7)]'
+                    : 'bg-slate-900 text-cyan-300 border-cyan-500/50 hover:bg-cyan-950'
+                }`}
+                title="Alternar entre Imagem Gigante e Alternativas (Tecla I)"
               >
-                {isPaused ? <Play className="h-3.5 w-3.5 text-[#00E5FF]" /> : <Pause className="h-3.5 w-3.5 text-amber-400" />}
-                <span className="hidden md:inline">{isPaused ? 'Continuar' : 'Pausar'}</span>
+                {rightPanelMode === 'image_focus' ? (
+                  <>
+                    <LayoutGrid className="h-3.5 w-3.5" />
+                    <span className="hidden md:inline">Ver Alternativas (I)</span>
+                  </>
+                ) : (
+                  <>
+                    <ImageIcon className="h-3.5 w-3.5" />
+                    <span className="hidden md:inline">Focar Imagem (I)</span>
+                  </>
+                )}
               </Button>
             )}
 
-            {/* Restart question */}
+            {!isEntranceFinished ? (
+              <Button
+                variant="default"
+                size="sm"
+                onClick={finishEntrance}
+                className="h-8 text-xs font-black gap-1 bg-[#00E5FF] hover:bg-cyan-300 text-slate-950"
+              >
+                <Play className="h-3.5 w-3.5 fill-current" />
+                <span className="hidden md:inline">Iniciar</span>
+              </Button>
+            ) : (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setIsPaused((prev) => !prev)}
+                className="h-8 text-xs font-bold gap-1 border-cyan-500/40 bg-slate-900 text-cyan-300 hover:bg-cyan-950"
+                title="Pausar / Retomar (Espaço)"
+              >
+                {isPaused ? <Play className="h-3.5 w-3.5 text-[#00E5FF]" /> : <Pause className="h-3.5 w-3.5 text-amber-400" />}
+              </Button>
+            )}
+
             <Button
               variant="outline"
               size="icon"
-              onClick={() => resetQuestionState(currentIndex)}
-              className="h-8 w-8 md:h-9 md:w-9 rounded-lg border-cyan-500/40 bg-slate-900 text-slate-300 hover:text-[#00E5FF] hover:bg-cyan-950/40"
-              title="Reiniciar tempo desta questão"
-            >
-              <RotateCcw className="h-3.5 w-3.5" />
-            </Button>
-
-            {/* Previous Question */}
-            <Button
-              variant="outline"
-              size="sm"
               onClick={handlePrev}
               disabled={currentIndex === 0}
-              className="h-8 md:h-9 text-xs gap-1 border-slate-700 bg-slate-900 text-slate-300 hover:text-white disabled:opacity-30"
+              className="h-8 w-8 border-slate-700 bg-slate-900 text-slate-300 hover:text-white disabled:opacity-30"
               title="Questão anterior (Seta Esquerda)"
             >
-              <ChevronLeft className="h-3.5 w-3.5" />
-              <span className="hidden md:inline">Anterior</span>
+              <ChevronLeft className="h-4 w-4" />
             </Button>
 
-            {/* MAIN ACTION: REVELAR RESPOSTA / PRÓXIMA QUESTÃO */}
             {!isRevealed ? (
               <Button
                 size="sm"
                 onClick={() => handleReveal(false)}
-                className="h-8 md:h-9 text-xs font-black gap-1.5 px-3 sm:px-4 md:px-5 shadow-[0_0_18px_rgba(245,158,11,0.6)] bg-gradient-to-r from-amber-500 to-yellow-400 hover:from-amber-400 hover:to-yellow-300 text-slate-950 hover:scale-[1.02] transition-transform"
-                title="Revelar resposta antes do tempo acabar (Tecla R ou Enter)"
+                className="h-8 text-xs font-black gap-1 px-3 shadow-[0_0_15px_rgba(245,158,11,0.6)] bg-gradient-to-r from-amber-500 to-yellow-400 hover:from-amber-400 hover:to-yellow-300 text-slate-950"
+                title="Revelar Resposta (R ou Enter)"
               >
                 <Sparkles className="h-3.5 w-3.5 text-slate-950 shrink-0" />
                 <span>Revelar</span>
@@ -891,441 +879,240 @@ export function TvPlayer({ quiz, onExit }: TvPlayerProps) {
               <Button
                 size="sm"
                 onClick={handleNext}
-                className="h-8 md:h-9 text-xs font-black gap-1.5 px-3 sm:px-4 md:px-5 shadow-[0_0_20px_rgba(0,229,255,0.7)] bg-gradient-to-r from-[#00E5FF] to-cyan-400 hover:from-cyan-300 hover:to-cyan-200 text-slate-950 hover:scale-[1.02] transition-transform"
-                title="Avançar para a próxima questão (Tecla N ou Seta Direita)"
+                className="h-8 text-xs font-black gap-1 px-3 shadow-[0_0_18px_rgba(0,229,255,0.7)] bg-gradient-to-r from-[#00E5FF] to-cyan-400 text-slate-950"
+                title="Próxima Questão (N ou Enter)"
               >
-                <span>{currentIndex === totalQuestions - 1 ? 'Finalizar' : 'Próxima'}</span>
-                <ChevronRight className="h-3.5 w-3.5" />
+                <span>{currentIndex === totalQuestions - 1 ? 'Fim' : 'Próxima'}</span>
+                <ChevronRight className="h-4 w-4" />
               </Button>
             )}
 
-            {/* Effect Switcher Select */}
-            <div className="hidden lg:flex items-center gap-1 pl-1 border-l border-indigo-500/40">
-              <select
-                value={activeEffect}
-                onChange={(e) => {
-                  const newEff = e.target.value as 'normal' | 'delay' | 'step_by_step';
-                  setActiveEffect(newEff);
-                  resetQuestionState(currentIndex);
-                }}
-                className="h-8 md:h-9 text-xs rounded-lg border border-cyan-500/40 bg-slate-900 px-2 font-medium text-cyan-200 focus:outline-none cursor-pointer hover:border-cyan-400"
-                title="Mudar efeito de entrada das questões"
-              >
-                <option value="normal">⚡ Normal</option>
-                <option value="delay">⏳ Delay</option>
-                <option value="step_by_step">👉 Passo a Passo</option>
-              </select>
-            </div>
+            <Button
+              variant="outline"
+              size="icon"
+              className="h-8 w-8 border-cyan-500/40 bg-slate-900 text-cyan-200 hover:bg-slate-800"
+              onClick={handleToggleMute}
+              title={isMuted ? 'Ativar Áudio' : 'Silenciar'}
+            >
+              {isMuted ? <VolumeX className="h-3.5 w-3.5 text-red-400" /> : <Volume2 className="h-3.5 w-3.5 text-[#00E5FF]" />}
+            </Button>
 
-            {/* Utilities: Audio, Mute, Fullscreen, Exit */}
-            <div className="flex items-center gap-1 pl-1 border-l border-cyan-500/30">
+            <Button
+              variant="outline"
+              size="icon"
+              className="h-8 w-8 border-cyan-500/40 bg-slate-900 text-[#00E5FF] hover:bg-slate-800"
+              onClick={toggleFullscreen}
+              title="Tela Cheia (Tecla F - Recomendado para ocultar barra do navegador!)"
+            >
+              {isFullscreen ? <Minimize2 className="h-3.5 w-3.5" /> : <Maximize2 className="h-3.5 w-3.5" />}
+            </Button>
 
-              <Button
-                variant="outline"
-                size="icon"
-                className="h-8 w-8 md:h-9 md:w-9 rounded-lg border border-cyan-500/40 bg-slate-900 text-cyan-200 hover:text-white hover:bg-slate-800"
-                onClick={() => setIsAudioModalOpen(true)}
-                title="Configurar Trilha Sonora e Áudio"
-              >
-                <Music className="h-3.5 w-3.5 text-[#00E5FF]" />
-              </Button>
-
-              <Button
-                variant="outline"
-                size="icon"
-                className="h-8 w-8 md:h-9 md:w-9 rounded-lg border border-cyan-500/40 bg-slate-900 text-cyan-200 hover:text-white hover:bg-slate-800"
-                onClick={handleToggleMute}
-                title={isMuted ? "Ativar Áudio" : "Silenciar Áudio"}
-              >
-                {isMuted ? <VolumeX className="h-3.5 w-3.5 text-destructive" /> : <Volume2 className="h-3.5 w-3.5 text-[#00E5FF]" />}
-              </Button>
-
-              <Button
-                variant="outline"
-                size="icon"
-                className="h-8 w-8 md:h-9 md:w-9 rounded-lg border border-cyan-500/40 bg-slate-900 text-cyan-200 hover:text-white hover:bg-slate-800"
-                onClick={toggleFullscreen}
-                title="Tela Cheia (F)"
-              >
-                {isFullscreen ? <Minimize2 className="h-3.5 w-3.5" /> : <Maximize2 className="h-3.5 w-3.5 text-[#00E5FF]" />}
-              </Button>
-
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8 md:h-9 md:w-9 rounded-lg text-slate-400 hover:text-destructive hover:bg-destructive/10"
-                onClick={handleExitQuiz}
-                title="Sair do Modo TV"
-              >
-                <X className="h-3.5 w-3.5" />
-              </Button>
-            </div>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 text-slate-400 hover:text-red-400"
+              onClick={handleExitQuiz}
+              title="Sair"
+            >
+              <X className="h-4 w-4" />
+            </Button>
           </div>
         </div>
       </header>
 
-      {/* CENTER STAGE: FULL-WIDTH BROADCAST STAGE */}
-      <main className="relative z-10 flex-1 min-h-0 px-1 sm:px-2 md:px-3 py-1 sm:py-1.5 w-full max-w-none flex flex-col justify-center overflow-hidden">
+      {/* PALCO PRINCIPAL: Aproveitamento de 92% da tela com Grid Adaptativo */}
+      <main className="relative z-10 flex-1 min-h-0 px-2.5 sm:px-4 py-2 w-full flex flex-col justify-between overflow-hidden gap-2">
         <div
           key={currentIndex}
-          className={`grid grid-cols-1 lg:grid-cols-12 gap-2 sm:gap-2.5 lg:gap-3 xl:gap-4 items-stretch w-full h-full min-h-0 ${navDirection === 'next' ? 'anim-question-next' : 'anim-question-prev'
-            }`}
+          className="grid grid-cols-1 lg:grid-cols-12 gap-3 lg:gap-4 items-stretch w-full flex-1 min-h-0"
         >
-
-          {/* LEFT COLUMN: LARGE ROUNDED STATEMENT CARD (SHOW DO MILHÃO THEME - WIDE & STRETCHED) */}
-          <div className={`${currentQuestion.imageUrl
-              ? 'lg:col-span-7 xl:col-span-8 2xl:col-span-8'
-              : 'lg:col-span-8 xl:col-span-8 2xl:col-span-9'
-            } flex flex-col min-h-0 h-full transition-all duration-500 ease-out ${activeEffect === 'step_by_step'
-              ? (entranceStep >= 0 ? 'opacity-100 translate-x-0' : 'opacity-0 -translate-x-16')
-              : 'opacity-100 translate-x-0'
-            }`}>
-            <div
-              className="p-3.5 sm:p-4 md:p-5 lg:p-6 xl:p-7 rounded-[22px] md:rounded-[28px] transition-all flex-1 min-h-0 flex flex-col bg-gradient-to-br from-[#1c0f42] via-[#161245] to-[#0a1532] border-2 border-cyan-400/40 shadow-[0_12px_40px_rgba(0,0,0,0.6),0_0_25px_rgba(0,229,255,0.18)] text-white"
-            >
-              {/* Question Header Banner matching user's attached reference */}
-              <div className="flex items-center justify-between pb-2 mb-2 sm:pb-2.5 sm:mb-2.5 border-b-2 border-cyan-400/30 shrink-0">
-                <div className="flex items-baseline gap-2.5">
-                  <span className="text-xs sm:text-sm font-black tracking-[0.25em] text-[#00E5FF] uppercase drop-shadow-[0_0_12px_rgba(0,229,255,0.7)]">
-                    QUESTÃO
-                  </span>
-                  <span className="text-3xl sm:text-4xl md:text-5xl font-black text-[#00E5FF] tracking-tight drop-shadow-[0_0_16px_rgba(0,229,255,0.8)] font-mono">
-                    {String(currentIndex + 1).padStart(2, '0')}
-                  </span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-[11px] sm:text-xs font-bold text-cyan-200 bg-cyan-950/70 border border-cyan-400/40 px-3 py-1 rounded-full shadow-[0_0_10px_rgba(0,229,255,0.2)]">
-                    {quiz.category || 'ENEM'}
-                  </span>
-                  <span className="text-[11px] sm:text-xs font-semibold text-slate-300 bg-slate-900/70 px-2.5 py-1 rounded-full border border-slate-700">
-                    {currentIndex + 1} de {totalQuestions}
-                  </span>
-                </div>
-              </div>
-
-              {/* Question Statement Text - Guaranteed to fit on screen without scroll or overflow-hidden */}
-              <div className="flex-1 min-h-0 flex flex-col justify-center py-1">
-                <p className={`whitespace-pre-line text-left text-slate-100 ${getStatementFontClasses(currentQuestion.statement)}`}>
-                  {currentQuestion.statement}
+          {/* COLUNA ESQUERDA: ENUNCIADO DE ALTO CONTRASTE */}
+          <div
+            className={`${
+              isVisualHeavyQuestion ? 'lg:col-span-5' : 'lg:col-span-7'
+            } flex flex-col min-h-0 h-full transition-all duration-300`}
+          >
+            <div className="p-4 sm:p-5 lg:p-6 rounded-2xl flex-1 min-h-0 flex flex-col justify-between bg-[#08122c]/95 border-2 border-cyan-400/50 shadow-[0_10px_35px_rgba(0,0,0,0.8)] overflow-y-auto">
+              {/* Corpo do Enunciado alinhado à esquerda (muito mais legível para blocos grandes no telão) */}
+              <div className="my-auto w-full">
+                {parsedStatement.topicBadge && (
+                  <div className="inline-block md:hidden mb-2 bg-amber-400 text-slate-950 font-black px-2.5 py-0.5 rounded-md text-xs uppercase">
+                    {parsedStatement.topicBadge}
+                  </div>
+                )}
+                <p
+                  style={getStatementStyle(parsedStatement.body)}
+                  className="whitespace-pre-line text-left text-white font-bold tracking-normal selection:bg-cyan-500 selection:text-black"
+                >
+                  {parsedStatement.body}
                 </p>
               </div>
+
+              {/* Dica discreta de atalhos no rodapé do card quando tiver imagem */}
+              {currentQuestion.imageUrl && (
+                <div className="pt-3 mt-3 border-t border-cyan-500/20 flex items-center justify-between text-xs text-cyan-300/80 font-semibold shrink-0">
+                  <span>💡 Dica Telão: Aperte [Z] para Tela Cheia da Imagem ou [I] para ampliar no painel</span>
+                  <span>Fonte: [+] / [-]</span>
+                </div>
+              )}
             </div>
           </div>
 
-          {/* RIGHT COLUMN: COMPACT WIDTH ALTERNATIVES (EXPANDS IN HEIGHT WHEN OVERFLOWING) */}
-          <div className={`${currentQuestion.imageUrl
-              ? 'lg:col-span-5 xl:col-span-4 2xl:col-span-4'
-              : 'lg:col-span-4 xl:col-span-4 2xl:col-span-3'
-            } flex flex-col justify-center gap-2 sm:gap-2.5 min-h-0 h-full`}>
-
-            {/* IMAGE CARD (DIRECTLY ON TOP OF ALTERNATIVES AS IN USER MOCKUP) */}
+          {/* COLUNA DIREITA: IMAGEM EM FUNDO BRANCO PURO + ALTERNATIVAS */}
+          <div
+            className={`${
+              isVisualHeavyQuestion ? 'lg:col-span-7' : 'lg:col-span-5'
+            } flex flex-col justify-between gap-2.5 min-h-0 h-full`}
+          >
+            {/* IMAGEM DE APOIO: Fundo BRANCO PURO para gráficos e tabelas do ENEM ficarem 100% nítidos de longe! */}
             {currentQuestion.imageUrl && (
               <div
                 onClick={() => setZoomedImage(currentQuestion.imageUrl || null)}
-                className="relative group cursor-pointer rounded-2xl overflow-hidden bg-[#0c1836] border-2 border-cyan-400/40 shadow-xl p-2 max-h-[19vh] sm:max-h-[21vh] lg:max-h-[23vh] flex items-center justify-center shrink-0 w-full transition-all duration-300 hover:border-cyan-300"
-                title="Clique para ampliar a imagem na TV (ou aperte a tecla Z)"
+                className={`relative group cursor-pointer rounded-2xl overflow-hidden bg-white border-[3px] border-[#00E5FF] shadow-[0_0_25px_rgba(0,229,255,0.25)] p-2 flex items-center justify-center w-full transition-all duration-300 ${
+                  rightPanelMode === 'image_focus'
+                    ? 'flex-1 min-h-0'
+                    : areAlternativesShort
+                      ? 'h-[46vh] sm:h-[50vh] shrink-0'
+                      : 'h-[34vh] sm:h-[38vh] shrink-0'
+                }`}
+                title="Clique para abrir em Tela Cheia (Tecla Z)"
               >
                 <img
                   src={currentQuestion.imageUrl}
-                  alt="Imagem de apoio da questão"
-                  className="max-h-[16vh] sm:max-h-[18vh] lg:max-h-[20vh] w-auto max-w-full object-contain object-center transition-transform group-hover:scale-[1.01]"
+                  alt="Imagem da questão"
+                  className="w-full h-full object-contain object-center"
                 />
-                <div className="absolute bottom-2 right-2 px-2.5 py-1 bg-black/85 text-[#00E5FF] text-[10px] md:text-xs rounded-lg flex items-center gap-1.5 opacity-90 group-hover:opacity-100 transition-opacity font-bold border border-cyan-400/40 shadow-md">
-                  <ZoomIn className="h-3 w-3" /> Ampliar (Z)
+                <div className="absolute bottom-2 right-2 flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setRightPanelMode((prev) => (prev === 'split' ? 'image_focus' : 'split'));
+                    }}
+                    className="px-2.5 py-1 bg-slate-900/90 hover:bg-slate-950 text-white text-xs rounded-lg font-bold border border-cyan-400/50 shadow-md"
+                  >
+                    {rightPanelMode === 'image_focus' ? 'Mostrar Alternativas (I)' : 'Expandir Aqui (I)'}
+                  </button>
+                  <div className="px-2.5 py-1 bg-[#00E5FF] text-slate-950 text-xs rounded-lg flex items-center gap-1 font-black shadow-md">
+                    <ZoomIn className="h-3.5 w-3.5" /> Tela Cheia (Z)
+                  </div>
                 </div>
               </div>
             )}
 
-            {/* ALTERNATIVES PILLS - COMPACT WIDTH & DYNAMIC EXPANDING HEIGHT */}
-            <div className={`flex flex-col justify-center ${
-              currentQuestion.imageUrl
-                ? 'gap-2 sm:gap-2.5 xl:gap-3 flex-1 min-h-0'
-                : 'gap-2 sm:gap-2.5 xl:gap-3 flex-1'
-            }`}>
-              {currentQuestion.alternatives.map((alt, altIdx) => {
-                const cardStyles = getAlternativeCardStyles(alt);
-                const badgeStyle = getBadgeStyle(alt);
+            {/* LISTA DE ALTERNATIVAS (Oculta temporariamente apenas se o apresentador ativar o modo 'image_focus' com a tecla I) */}
+            {rightPanelMode !== 'image_focus' && (
+              <div
+                className={`grid ${
+                  currentQuestion.imageUrl && areAlternativesShort
+                    ? 'grid-cols-2 gap-2'
+                    : 'grid-cols-1 gap-2'
+                } flex-1 min-h-0 content-stretch`}
+              >
+                {currentQuestion.alternatives.map((alt, altIdx) => {
+                  const cardStyles = getAlternativeCardStyles(alt);
+                  const badgeStyle = getBadgeStyle(alt);
 
-                // Entrance animation styles
-                let entranceAnimClasses = "transition-all duration-400 ease-out";
-                let altTransitionDelay = "0ms";
-
-                if (activeEffect === 'delay') {
-                  if (!isEntranceFinished && entranceStep < 1) {
-                    entranceAnimClasses += " opacity-0 translate-y-8 pointer-events-none scale-95";
+                  let entranceAnimClasses = 'transition-all duration-300 ease-out';
+                  if (activeEffect === 'delay' && !isEntranceFinished && entranceStep < 1) {
+                    entranceAnimClasses += ' opacity-0 translate-y-6 pointer-events-none';
+                  } else if (activeEffect === 'step_by_step' && !isEntranceFinished && entranceStep <= altIdx) {
+                    entranceAnimClasses += ' opacity-0 translate-x-12 pointer-events-none';
                   } else {
-                    entranceAnimClasses += " opacity-100 translate-y-0 scale-100";
+                    entranceAnimClasses += ' opacity-100 translate-x-0 translate-y-0';
                   }
-                } else if (activeEffect === 'step_by_step') {
-                  const isItemVisible = isEntranceFinished || entranceStep > altIdx;
-                  if (!isItemVisible) {
-                    entranceAnimClasses += " opacity-0 translate-x-16 pointer-events-none scale-95";
-                  } else {
-                    entranceAnimClasses += " opacity-100 translate-x-0 scale-100 shadow-sm";
-                  }
-                } else {
-                  // normal: cascading smooth entry
-                  altTransitionDelay = `${altIdx * 80}ms`;
-                  if (!isEntranceFinished && entranceStep < 1) {
-                    entranceAnimClasses += " opacity-0 translate-y-5 scale-[0.98]";
-                  } else {
-                    entranceAnimClasses += " opacity-100 translate-y-0 scale-100";
-                  }
-                }
 
-                return (
-                  <div
-                    key={alt.letter}
-                    style={{
-                      transitionDelay: altTransitionDelay,
-                    }}
-                    className={`relative overflow-hidden flex items-center px-3.5 py-2.5 sm:px-4 sm:py-3 xl:py-3.5 rounded-2xl md:rounded-[20px] transition-all duration-300 text-left ${
-                      currentQuestion.imageUrl
-                        ? 'shrink-0 min-h-[48px] sm:min-h-[54px] xl:min-h-[60px] h-auto'
-                        : 'flex-1 min-h-[56px] sm:min-h-[62px] xl:min-h-[70px] h-auto'
-                    } ${cardStyles} ${entranceAnimClasses} ${isRevealed && alt.isCorrect ? 'anim-winner-glow ring-4 ring-emerald-300/80 shadow-[0_0_35px_rgba(16,185,129,0.8)]' : ''
-                      }`}
-                  >
-                    {/* Subtle Sheen Glint on unrevealed alternatives */}
-                    {!isRevealed && (
-                      <div className="pointer-events-none absolute inset-0 w-1/2 h-full bg-gradient-to-r from-transparent via-white/10 to-transparent anim-card-glint" />
-                    )}
+                  // Se for grid de 2 colunas (5 alternativas curtas), a 5ª alternativa (E) ocupa as 2 colunas centralizada
+                  const isLastInTwoCols =
+                    currentQuestion.imageUrl &&
+                    areAlternativesShort &&
+                    altIdx === currentQuestion.alternatives.length - 1 &&
+                    currentQuestion.alternatives.length % 2 !== 0;
 
-                    {/* Letter badge: circular badge with electric cyan styling */}
+                  return (
                     <div
-                      className={`rounded-full flex items-center justify-center font-black shadow-md ${badgeStyle} ${altBadgeClasses}`}
+                      key={alt.letter}
+                      className={`relative overflow-hidden flex items-center px-3.5 py-2 sm:px-4 sm:py-2.5 rounded-2xl text-left ${
+                        isLastInTwoCols ? 'col-span-2' : ''
+                      } ${cardStyles} ${entranceAnimClasses}`}
                     >
-                      {alt.letter.toLowerCase()}
+                      {/* Crachá da Letra (A, B, C, D, E) */}
+                      <div
+                        className={`w-9 h-9 sm:w-10 sm:h-10 lg:w-11 lg:h-11 rounded-full flex items-center justify-center text-lg sm:text-xl lg:text-2xl font-black shrink-0 mr-3.5 ${badgeStyle}`}
+                      >
+                        {alt.letter.toUpperCase()}
+                      </div>
+
+                      {/* Texto da Alternativa com escala dinâmica */}
+                      <div className="flex-1 min-w-0 pr-1">
+                        <span
+                          style={getAlternativeTextStyle()}
+                          className="font-bold block break-words whitespace-normal text-white"
+                        >
+                          {alt.text}
+                        </span>
+                      </div>
+
+                      {/* Selo CORRETA ao revelar */}
+                      {isRevealed && alt.isCorrect && (
+                        <span className="ml-2 px-3 py-1 text-xs sm:text-sm font-black rounded-full bg-white text-emerald-950 shrink-0 shadow-lg flex items-center gap-1">
+                          <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+                          CORRETA
+                        </span>
+                      )}
                     </div>
-
-                    {/* Alternative text - wraps cleanly and expands card height when long */}
-                    <div className="flex-1 min-w-0 pr-1 py-0.5">
-                      <span className={`leading-snug block break-words whitespace-normal ${altFontClasses}`}>
-                        {alt.text}
-                      </span>
-                    </div>
-
-                    {/* Stamp when revealed */}
-                    {isRevealed && alt.isCorrect && (
-                      <span className="ml-1.5 sm:ml-2 px-2.5 sm:px-3 py-1 text-xs sm:text-sm font-black rounded-full bg-white text-emerald-900 shrink-0 shadow-lg ring-2 ring-emerald-300 animate-in zoom-in-75 duration-300 flex items-center gap-1">
-                        <Sparkles className="h-3.5 w-3.5 text-emerald-600" />
-                        CORRETA
-                      </span>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-
+                  );
+                })}
+              </div>
+            )}
           </div>
         </div>
+
+        {/* BANNER DE EXPLICAÇÃO / GABARITO COMENTADO (Regra de negócio do initial-quiz.ts) */}
+        {isRevealed && quiz.showExplanation !== false && currentQuestion.explanation && showExplanationBanner && (
+          <div className="w-full bg-gradient-to-r from-emerald-950/95 via-teal-950/95 to-emerald-950/95 border-2 border-emerald-400 rounded-2xl px-4 py-2.5 shadow-[0_0_30px_rgba(16,185,129,0.4)] flex items-center justify-between gap-4 animate-in slide-in-from-bottom-4 duration-300 shrink-0">
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="p-2 rounded-xl bg-emerald-400 text-slate-950 font-black shrink-0">
+                <BookOpen className="h-5 w-5" />
+              </div>
+              <p className="text-sm sm:text-base lg:text-lg xl:text-xl font-bold text-emerald-100 leading-snug">
+                {currentQuestion.explanation}
+              </p>
+            </div>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setShowExplanationBanner(false)}
+              className="text-emerald-300 hover:text-white shrink-0"
+              title="Ocultar comentário"
+            >
+              <X className="h-5 w-5" />
+            </Button>
+          </div>
+        )}
       </main>
 
-      {/* CINEMATIC FLY-THROUGH INTRO OVERLAY (Continuously expanding logo & title until flying past screen) */}
-      {showIntro && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center overflow-hidden select-none pointer-events-none intro-3d-stage"
-          style={{ perspective: '1000px', perspectiveOrigin: 'center center' }}
-        >
-          {/* INJECTED KEYFRAMES FOR 3D PERSPECTIVE ENTRANCE + HOLD + EXPONENTIAL PUSH */}
-          <style>{`
-            @keyframes logoExponentialPush {
-              /* FASE 1: ENTRADA SUAVE (0ms a 650ms / 0% a 22%) */
-              0% {
-                transform: translate3d(0, 26px, -240px);
-                opacity: 0;
-                filter: blur(4px);
-              }
-              22% {
-                transform: translate3d(0, 0px, 0px);
-                opacity: 1;
-                filter: blur(0px);
-              }
-
-              /* FASE 2: PAUSA PARA LEITURA (650ms a 1650ms / 22% a 57%) */
-              57% {
-                transform: translate3d(0, 0px, 0px);
-                opacity: 1;
-                filter: blur(0px);
-              }
-
-              /* FASE 3: DISPARO EXPONENCIAL ACELERADO (1650ms a 2900ms / 57% a 100%) */
-              73% {
-                transform: translate3d(0, 0, 360px);
-                opacity: 1;
-                filter: blur(0px);
-              }
-              86% {
-                transform: translate3d(0, 0, 680px);
-                opacity: 1;
-                filter: blur(0px);
-              }
-              93% {
-                transform: translate3d(0, 0, 870px);
-                opacity: 0.85;
-                filter: blur(0.5px);
-              }
-              97% {
-                transform: translate3d(0, 0, 940px);
-                opacity: 0.45;
-                filter: blur(1px);
-              }
-              100% {
-                transform: translate3d(0, 0, 980px);
-                opacity: 0;
-                filter: blur(2px);
-              }
-            }
-
-            @keyframes introBgDissolve {
-              0%, 80% {
-                opacity: 1;
-              }
-              100% {
-                opacity: 0;
-              }
-            }
-
-            @keyframes introItemSlideDown {
-              0% {
-                opacity: 0;
-                transform: translateY(-16px);
-              }
-              100% {
-                opacity: 1;
-                transform: translateY(0);
-              }
-            }
-
-            @keyframes introItemSlideUp {
-              0% {
-                opacity: 0;
-                transform: translateY(18px);
-              }
-              100% {
-                opacity: 1;
-                transform: translateY(0);
-              }
-            }
-
-            @keyframes introItemFade {
-              0% {
-                opacity: 0;
-              }
-              100% {
-                opacity: 1;
-              }
-            }
-
-            .intro-3d-stage {
-              perspective: 1000px !important;
-              perspective-origin: center center !important;
-            }
-
-            .intro-hero-expand {
-              transform-style: preserve-3d !important;
-              animation: logoExponentialPush 2900ms linear forwards !important;
-              will-change: transform, opacity, filter;
-            }
-
-            .intro-bg-dissolve {
-              animation: introBgDissolve 2900ms linear forwards !important;
-              will-change: opacity;
-            }
-          `}</style>
-
-          {/* Solid background: white, dissolves smoothly as logo reaches the camera */}
-          <div className="absolute inset-0 bg-white intro-bg-dissolve" />
-
-          {/* Centered 3D entity: grows exponentially through perspective depth without using scale */}
-          <div
-            className="relative z-10 text-center px-6 max-w-4xl flex flex-col items-center intro-hero-expand"
-            style={{ transformStyle: 'preserve-3d' }}
-          >
-            {/* Logo with smooth entrance */}
-            <div
-              className="relative flex items-center justify-center mb-5"
-              style={{
-                animation: 'introItemSlideDown 550ms cubic-bezier(0.16, 1, 0.3, 1) both',
-                animationDelay: '60ms',
-              }}
-            >
-              <img
-                src="/logo-blue.png"
-                alt="Logo da Revisão"
-                className="h-24 sm:h-28 md:h-32 w-auto max-w-[340px] object-contain drop-shadow-md"
-                onError={(e) => {
-                  (e.target as HTMLImageElement).src = '/logo.png';
-                }}
-              />
-            </div>
-
-            {/* Subtitle badge with smooth entrance */}
-            <div
-              className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-[#3702B3]/10 border border-[#3702B3]/25 text-[#3702B3] text-xs font-black uppercase tracking-[0.25em] mb-4 shadow-xs"
-              style={{
-                animation: 'introItemSlideUp 500ms cubic-bezier(0.16, 1, 0.3, 1) both',
-                animationDelay: '160ms',
-              }}
-            >
-              <Sparkles className="h-4 w-4 text-[#3702B3]" />
-              <span>REVISÃO ENEM</span>
-            </div>
-
-            {/* Revision Title with smooth entrance */}
-            <h1
-              className="text-4xl sm:text-5xl md:text-7xl font-black text-[#3702B3] tracking-tight leading-tight mb-3 drop-shadow-xs"
-              style={{
-                animation: 'introItemSlideUp 600ms cubic-bezier(0.16, 1, 0.3, 1) both',
-                animationDelay: '240ms',
-              }}
-            >
-              {quiz.title}
-            </h1>
-
-            {/* Category / Question counter with smooth entrance */}
-            <p
-              className="text-sm sm:text-base md:text-lg text-slate-500 font-bold tracking-wide"
-              style={{
-                animation: 'introItemFade 500ms cubic-bezier(0.16, 1, 0.3, 1) both',
-                animationDelay: '360ms',
-              }}
-            >
-              {quiz.category ? `${quiz.category} • ` : ''}
-              {totalQuestions} {totalQuestions === 1 ? 'questão' : 'questões'}
-            </p>
-          </div>
-
-          {/* Host Skip Button */}
-          <button
-            type="button"
-            onClick={skipIntro}
-            className="pointer-events-auto absolute bottom-6 right-6 px-4 py-2 rounded-xl bg-[#3702B3]/5 hover:bg-[#3702B3]/10 border border-[#3702B3]/20 text-[#3702B3] text-xs font-semibold transition-colors flex items-center gap-2 cursor-pointer z-20 shadow-xs"
-            title="Pular abertura e iniciar o quiz agora"
-          >
-            <span>Pular Abertura</span>
-            <span className="text-[10px] font-mono opacity-60">[Espaço / Enter]</span>
-          </button>
-        </div>
-      )}
-
-      {/* FULLSCREEN IMAGE ZOOM DIALOG */}
+      {/* MODAL DE ZOOM DA IMAGEM EM TELA CHEIA (94% da tela do Telão LED com fundo branco!) */}
       <Dialog open={!!zoomedImage} onOpenChange={(open) => !open && setZoomedImage(null)}>
-        <DialogContent className="max-w-5xl md:max-w-6xl p-4 sm:p-6 flex flex-col items-center justify-center bg-black/95 text-white border-slate-800">
-          <DialogHeader className="w-full flex flex-row items-center justify-between pb-2">
-            <DialogTitle className="text-sm font-medium text-slate-300">
-              Imagem de Apoio da Questão {currentIndex + 1}
+        <DialogContent className="max-w-[96vw] w-[96vw] h-[92vh] max-h-[92vh] p-3 sm:p-5 flex flex-col bg-[#050d21] text-white border-2 border-[#00E5FF] shadow-[0_0_60px_rgba(0,229,255,0.4)]">
+          <DialogHeader className="w-full flex flex-row items-center justify-between pb-2 shrink-0">
+            <DialogTitle className="text-lg sm:text-xl font-black text-[#00E5FF] flex items-center gap-2">
+              <ZoomIn className="h-5 w-5" />
+              Questão {String(currentIndex + 1).padStart(2, '0')} — Visualização Ampliada para o Auditório (Pressione Z ou ESC para voltar)
             </DialogTitle>
             <DialogDescription className="sr-only">
-              Visualização ampliada da imagem
+              Imagem ampliada para leitura no telão
             </DialogDescription>
           </DialogHeader>
           {zoomedImage && (
-            <div className="w-full flex items-center justify-center max-h-[85vh] overflow-hidden rounded-lg bg-white/5 p-2">
+            <div
+              onClick={() => setZoomedImage(null)}
+              className="w-full flex-1 min-h-0 flex items-center justify-center overflow-hidden rounded-xl bg-white p-4 cursor-zoom-out"
+            >
               <img
                 src={zoomedImage}
                 alt="Imagem ampliada"
-                className="max-h-[80vh] w-auto max-w-full object-contain rounded-md shadow-2xl bg-white p-2"
+                className="w-full h-full object-contain"
               />
             </div>
           )}
