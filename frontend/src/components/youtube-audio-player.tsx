@@ -77,7 +77,7 @@ export function YoutubeAudioPlayer() {
   });
 
   return (
-    <aside className="fixed bottom-24 right-4 z-[60] w-[min(320px,calc(100vw-2rem))] overflow-hidden rounded-xl border bg-background shadow-xl">
+    <aside className="hidden fixed bottom-24 right-4 z-[60] w-[min(320px,calc(100vw-2rem))] overflow-hidden rounded-xl border bg-background shadow-xl">
       <div className="flex items-center justify-between gap-2 px-3 py-2">
         <span className="text-xs font-semibold">Player oficial do YouTube</span>
         <button
