@@ -140,7 +140,7 @@ export function YoutubeAudioPlayer() {
             setBgPlayback((curr) => curr && { ...curr, volume: targetVol, isPaused: targetVol === 0 });
           }
           if (channel === 'sfx' || channel === 'all') {
-            const sfxVol = request.volume ?? 0.7;
+            const sfxVol = request.volume ?? 0.85;
             try {
               sfxPlayerRef.current?.contentWindow?.postMessage(
                 JSON.stringify({ event: 'command', func: 'setVolume', args: [Math.round(sfxVol * 100)] }),
@@ -166,7 +166,7 @@ export function YoutubeAudioPlayer() {
           setSfxPlayback({
             videoId: request.videoId,
             loop: Boolean(request.loop),
-            volume: request.volume ?? 0.7,
+            volume: request.volume ?? 0.85,
             playId: Date.now(),
           });
         }
@@ -185,41 +185,55 @@ export function YoutubeAudioPlayer() {
       const cw = bgPlayerRef.current?.contentWindow;
       if (!cw) return;
 
-      if (vol === 0) {
+      if (vol === 0 || bgPlayback.isPaused) {
         cw.postMessage(JSON.stringify({ event: 'command', func: 'mute', args: '' }), '*');
         cw.postMessage(JSON.stringify({ event: 'command', func: 'pauseVideo', args: '' }), '*');
       } else {
         cw.postMessage(JSON.stringify({ event: 'command', func: 'unMute', args: '' }), '*');
+        cw.postMessage(JSON.stringify({ event: 'command', func: 'setVolume', args: [vol] }), '*');
         cw.postMessage(JSON.stringify({ event: 'command', func: 'playVideo', args: '' }), '*');
       }
-      cw.postMessage(JSON.stringify({ event: 'command', func: 'setVolume', args: [vol] }), '*');
     };
 
     sendVolume();
-    const timer = window.setTimeout(sendVolume, 200);
-    return () => window.clearTimeout(timer);
-  }, [bgPlayback?.volume]);
+    const intervals = [100, 300, 700, 1500];
+    const timers = intervals.map((d) => window.setTimeout(sendVolume, d));
+    return () => timers.forEach((t) => window.clearTimeout(t));
+  }, [bgPlayback?.volume, bgPlayback?.videoId, bgPlayback?.isPaused]);
 
-  // Sync SFX volume when volume changes
+  // Play SFX reliably as soon as iframe mounts and on player ready
   useEffect(() => {
     if (!sfxPlayback) return;
-    const sendVolume = () => {
-      const vol = Math.round(sfxPlayback.volume * 100);
+    const vol = Math.round(sfxPlayback.volume * 100);
+
+    const sendPlay = () => {
       const cw = sfxPlayerRef.current?.contentWindow;
       if (!cw) return;
-
-      if (vol === 0) {
-        cw.postMessage(JSON.stringify({ event: 'command', func: 'mute', args: '' }), '*');
-      } else {
+      try {
         cw.postMessage(JSON.stringify({ event: 'command', func: 'unMute', args: '' }), '*');
-      }
-      cw.postMessage(JSON.stringify({ event: 'command', func: 'setVolume', args: [vol] }), '*');
+        cw.postMessage(JSON.stringify({ event: 'command', func: 'setVolume', args: [vol] }), '*');
+        cw.postMessage(JSON.stringify({ event: 'command', func: 'playVideo', args: '' }), '*');
+      } catch {}
     };
 
-    sendVolume();
-    const timer = window.setTimeout(sendVolume, 200);
-    return () => window.clearTimeout(timer);
-  }, [sfxPlayback?.volume]);
+    sendPlay();
+    const intervals = [80, 200, 450, 800, 1300, 2000, 2800];
+    const timers = intervals.map((d) => window.setTimeout(sendPlay, d));
+
+    const handleMessage = (e: MessageEvent) => {
+      if (typeof e.data === 'string' && (e.data.includes('onReady') || e.data.includes('initialDelivery') || e.data.includes('infoDelivery'))) {
+        sendPlay();
+      }
+    };
+    window.addEventListener('message', handleMessage);
+
+    return () => {
+      timers.forEach((t) => window.clearTimeout(t));
+      window.removeEventListener('message', handleMessage);
+    };
+  }, [sfxPlayback?.playId, sfxPlayback?.videoId, sfxPlayback?.volume]);
+
+  const origin = typeof window !== 'undefined' ? window.location.origin : '';
 
   const bgParams = bgPlayback ? new URLSearchParams({
     autoplay: '1',
@@ -228,6 +242,7 @@ export function YoutubeAudioPlayer() {
     loop: '1',
     enablejsapi: '1',
     playlist: bgPlayback.videoId,
+    ...(origin ? { origin } : {}),
   }) : null;
 
   const sfxParams = sfxPlayback ? new URLSearchParams({
@@ -236,21 +251,26 @@ export function YoutubeAudioPlayer() {
     playsinline: '1',
     loop: sfxPlayback.loop ? '1' : '0',
     enablejsapi: '1',
+    ...(origin ? { origin } : {}),
     ...(sfxPlayback.loop ? { playlist: sfxPlayback.videoId } : {}),
   }) : null;
 
   if (!bgPlayback && !sfxPlayback) return null;
 
   return (
-    <div className="fixed -bottom-96 -right-96 w-10 h-10 opacity-0 pointer-events-none overflow-hidden z-[-1]" aria-hidden="true">
+    <div
+      className="fixed pointer-events-none overflow-hidden z-[-1]"
+      style={{ left: '-9999px', top: '-9999px', width: '320px', height: '240px', opacity: 0.01 }}
+      aria-hidden="true"
+    >
       {bgPlayback && (
         <iframe
           key={`bg-${bgPlayback.videoId}`}
           ref={bgPlayerRef}
           src={`https://www.youtube.com/embed/${bgPlayback.videoId}?${bgParams?.toString()}`}
           title="Background Music Player"
-          className="w-1 h-1"
-          allow="autoplay; encrypted-media"
+          style={{ width: '320px', height: '240px' }}
+          allow="autoplay; encrypted-media; clipboard-write"
         />
       )}
       {sfxPlayback && (
@@ -259,8 +279,8 @@ export function YoutubeAudioPlayer() {
           ref={sfxPlayerRef}
           src={`https://www.youtube.com/embed/${sfxPlayback.videoId}?${sfxParams?.toString()}`}
           title="SFX Sound Player"
-          className="w-1 h-1"
-          allow="autoplay; encrypted-media"
+          style={{ width: '320px', height: '240px' }}
+          allow="autoplay; encrypted-media; clipboard-write"
         />
       )}
     </div>

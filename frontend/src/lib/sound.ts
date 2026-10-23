@@ -356,7 +356,7 @@ class SoundManager {
         channel: 'sfx',
         videoId: youtubeVideoId,
         loop: false,
-        volume: this.sfxVolume,
+        volume: 0.9,
       });
       return;
     }
@@ -626,7 +626,7 @@ class SoundManager {
     osc1.type = 'sine';
     osc1.frequency.setValueAtTime(75, t);
     osc1.frequency.exponentialRampToValueAtTime(40, t + 0.15);
-    gain1.gain.setValueAtTime(0.18, t);
+    gain1.gain.setValueAtTime(0.45, t);
     gain1.gain.exponentialRampToValueAtTime(0.001, t + 0.18);
     osc1.connect(gain1);
     gain1.connect(this.sfxGainNode);
@@ -639,7 +639,7 @@ class SoundManager {
     osc2.type = 'sine';
     osc2.frequency.setValueAtTime(65, t + 0.22);
     osc2.frequency.exponentialRampToValueAtTime(35, t + 0.38);
-    gain2.gain.setValueAtTime(0.14, t + 0.22);
+    gain2.gain.setValueAtTime(0.35, t + 0.22);
     gain2.gain.exponentialRampToValueAtTime(0.001, t + 0.4);
     osc2.connect(gain2);
     gain2.connect(this.sfxGainNode);
@@ -662,7 +662,7 @@ class SoundManager {
     const gain = this.ctx.createGain();
     osc.type = 'triangle';
     osc.frequency.setValueAtTime(700 * pitch, t);
-    gain.gain.setValueAtTime(0.06, t);
+    gain.gain.setValueAtTime(0.3, t);
     gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.08);
 
     osc.connect(gain);
@@ -699,8 +699,8 @@ class SoundManager {
     osc.frequency.setValueAtTime(130, t);
     osc.frequency.linearRampToValueAtTime(90, t + 0.8);
 
-    gain.gain.setValueAtTime(0.2, t);
-    gain.gain.linearRampToValueAtTime(0.18, t + 0.6);
+    gain.gain.setValueAtTime(0.45, t);
+    gain.gain.linearRampToValueAtTime(0.35, t + 0.6);
     gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.85);
 
     osc.connect(gain);
@@ -730,7 +730,7 @@ class SoundManager {
       osc.frequency.setValueAtTime(freq, t + idx * 0.1);
 
       gain.gain.setValueAtTime(0.001, t + idx * 0.1);
-      gain.gain.linearRampToValueAtTime(0.15, t + idx * 0.1 + 0.05);
+      gain.gain.linearRampToValueAtTime(0.35, t + idx * 0.1 + 0.05);
       gain.gain.exponentialRampToValueAtTime(0.0001, t + idx * 0.1 + 0.9);
 
       osc.connect(gain);

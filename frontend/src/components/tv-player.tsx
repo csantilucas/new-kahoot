@@ -167,7 +167,7 @@ export function TvPlayer({ quiz, onExit }: TvPlayerProps) {
     if (next > totalAlternatives) {
       setIsEntranceFinished(true);
     }
-    if (quiz.soundEffects) soundManager.playTickingSound();
+    if (quiz.soundEffects !== false) soundManager.playTickingSound();
   }, [currentQuestion, entranceStep, quiz.soundEffects]);
 
   // Initialize or reset question state
@@ -242,7 +242,7 @@ export function TvPlayer({ quiz, onExit }: TvPlayerProps) {
       // Delay: Statement is shown at step 0; alternatives emerge at step 1 after delay; timer starts at step 2
       timeoutId = setTimeout(() => {
         setEntranceStep(1); // alternatives slide up
-        if (quiz.soundEffects) soundManager.playTickingSound();
+        if (quiz.soundEffects !== false) soundManager.playTickingSound();
 
         timeoutId = setTimeout(() => {
           setIsEntranceFinished(true); // timer begins!
@@ -257,7 +257,7 @@ export function TvPlayer({ quiz, onExit }: TvPlayerProps) {
         step++;
         if (step <= totalSteps) {
           setEntranceStep(step);
-          if (quiz.soundEffects) soundManager.playTickingSound();
+          if (quiz.soundEffects !== false) soundManager.playTickingSound();
         } else {
           clearInterval(intervalId!);
           setIsEntranceFinished(true); // All alternatives presented -> timer starts!
@@ -281,12 +281,14 @@ export function TvPlayer({ quiz, onExit }: TvPlayerProps) {
     setShowRevealFlash(true);
     setTimeout(() => setShowRevealFlash(false), 450);
 
-    if (quiz.soundEffects) {
-      // Interrompe contagem anterior para tocar a resposta certa de forma limpa e imediata
-      soundManager.stopYoutubeAudio('sfx');
-
-      // Toca a vinheta oficial de CERTA RESPOSTA! (Silvio Santos)
-      soundManager.playCorrectAnswer(quiz.correctSoundUrl || undefined);
+    if (quiz.soundEffects !== false) {
+      if (isTimeUp) {
+        // Tempo esgotado: toca trilha de tempo esgotado ou seleção de perguntas
+        soundManager.playTimeUpBuzzer(quiz.timeUpSoundUrl || undefined);
+      } else {
+        // Revelado pelo apresentador: toca vinheta de CERTA RESPOSTA!
+        soundManager.playCorrectAnswer(quiz.correctSoundUrl || undefined);
+      }
     }
 
     // Dispara a celebração visual com confetes
@@ -329,31 +331,26 @@ export function TvPlayer({ quiz, onExit }: TvPlayerProps) {
 
     if (isRevealed) return;
 
-    // Se o áudio for do YouTube, aciona com antecedência de 2 segundos para compensar a latência de carregamento do player,
-    // garantindo que a fala/efeito soe exatamente no segundo configurado (ex: aos 10s)
-    const isYoutubeCountdown = Boolean(quiz.countdownSoundUrl && getYoutubeVideoId(quiz.countdownSoundUrl));
-    const countdownLeadTime = isYoutubeCountdown ? Math.min(questionDuration, warningTime + 2) : warningTime;
-
-    if (timeLeft <= countdownLeadTime && !hasTriggeredFinalCountdownRef.current) {
+    // Dispara contagem final e zera a música de fundo exatamente na marca configurada (ex: aos 10s)
+    if (timeLeft <= warningTime && !hasTriggeredFinalCountdownRef.current) {
       hasTriggeredFinalCountdownRef.current = true;
-      if (quiz.soundEffects) {
+      soundManager.zeroBackgroundMusic();
+      if (quiz.soundEffects !== false) {
         soundManager.playCountdownSound(quiz.countdownSoundUrl || undefined);
       }
     }
 
-    // Zerar música de fundo e disparar efeitos exatamente na marca da contagem configurada (ex: aos 10s):
+    // Durante os segundos finais sem áudio de contagem, toca o batimento cardíaco; caso contrário, toca o tick a cada segundo
     if (timeLeft <= warningTime) {
-      soundManager.zeroBackgroundMusic();
-      if (!quiz.countdownSoundUrl && quiz.soundEffects) {
-        // Se não houver áudio customizado de contagem, toca o batimento cardíaco procedural
+      if (!quiz.countdownSoundUrl && quiz.soundEffects !== false) {
         soundManager.playHeartbeat();
       }
     } else {
-      if (quiz.soundEffects) {
+      if (quiz.soundEffects !== false) {
         soundManager.playTickingSound();
       }
     }
-  }, [timeLeft, isEntranceFinished, isPaused, isRevealed, isCompleted, questions.length, quiz, warningTime, questionDuration, handleReveal]);
+  }, [timeLeft, isEntranceFinished, isPaused, isRevealed, isCompleted, questions.length, quiz, warningTime, handleReveal]);
 
   // Next Question with Broadcast TV Transition (Plano 5)
   const handleNext = useCallback(() => {
@@ -365,12 +362,12 @@ export function TvPlayer({ quiz, onExit }: TvPlayerProps) {
     } else {
       setIsCompleted(true);
       soundManager.stopBackgroundMusic();
-      if (quiz.soundEffects) {
-        soundManager.playCorrectAnswer(quiz.correctSoundUrl || undefined);
+      if (quiz.soundEffects !== false) {
+        soundManager.playConfettiSound(quiz.confettiSoundUrl || undefined);
         triggerConfetti();
       }
     }
-  }, [currentIndex, totalQuestions, quiz.soundEffects, triggerConfetti]);
+  }, [currentIndex, totalQuestions, quiz.soundEffects, quiz.confettiSoundUrl, triggerConfetti]);
 
   // Previous Question with Broadcast TV Transition (Plano 5)
   const handlePrev = useCallback(() => {
