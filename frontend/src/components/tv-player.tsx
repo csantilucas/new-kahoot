@@ -22,7 +22,6 @@ import {
   HelpCircle,
   Trophy,
   Clock,
-  BookOpen,
   ZoomIn,
   ZoomOut,
   Music,
@@ -74,9 +73,6 @@ export function TvPlayer({ quiz, onExit }: TvPlayerProps) {
   // 'split' = Imagem + Alternativas lado a lado/empilhadas de forma inteligente
   // 'image_focus' = Imagem gigante ocupando a coluna direita (ideal para leitura do gráfico/charge antes das alternativas)
   const [rightPanelMode, setRightPanelMode] = useState<'split' | 'image_focus'>('split');
-
-  // Mostrar/ocultar explicação após revelar
-  const [showExplanationBanner, setShowExplanationBanner] = useState(true);
 
   // Audio configuration modal
   const [isAudioModalOpen, setIsAudioModalOpen] = useState(false);
@@ -204,7 +200,6 @@ export function TvPlayer({ quiz, onExit }: TvPlayerProps) {
     setIsRevealed(false);
     setZoomedImage(null);
     setRightPanelMode('split');
-    setShowExplanationBanner(true);
     setIsEntranceFinished(false);
     setEntranceStep(0);
     hasTriggeredFinalCountdownRef.current = false;
@@ -1068,28 +1063,6 @@ export function TvPlayer({ quiz, onExit }: TvPlayerProps) {
           </div>
         </div>
 
-        {/* BANNER DE EXPLICAÇÃO / GABARITO COMENTADO (Regra de negócio do initial-quiz.ts) */}
-        {isRevealed && quiz.showExplanation !== false && currentQuestion.explanation && showExplanationBanner && (
-          <div className="w-full bg-gradient-to-r from-emerald-950/95 via-teal-950/95 to-emerald-950/95 border-2 border-emerald-400 rounded-2xl px-4 py-2.5 shadow-[0_0_30px_rgba(16,185,129,0.4)] flex items-center justify-between gap-4 animate-in slide-in-from-bottom-4 duration-300 shrink-0">
-            <div className="flex items-center gap-3 min-w-0">
-              <div className="p-2 rounded-xl bg-emerald-400 text-slate-950 font-black shrink-0">
-                <BookOpen className="h-5 w-5" />
-              </div>
-              <p className="text-sm sm:text-base lg:text-lg xl:text-xl font-bold text-emerald-100 leading-snug">
-                {currentQuestion.explanation}
-              </p>
-            </div>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => setShowExplanationBanner(false)}
-              className="text-emerald-300 hover:text-white shrink-0"
-              title="Ocultar comentário"
-            >
-              <X className="h-5 w-5" />
-            </Button>
-          </div>
-        )}
       </main>
 
       {/* MODAL DE ZOOM DA IMAGEM EM TELA CHEIA (94% da tela do Telão LED com fundo branco!) */}
