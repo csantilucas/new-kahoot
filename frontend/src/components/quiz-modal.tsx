@@ -58,8 +58,8 @@ export function QuizModal({ isOpen, onClose, onSuccess, quizToEdit }: QuizModalP
       setTitle(quizToEdit.title);
       setDescription(quizToEdit.description || '');
       setCategory(quizToEdit.category || 'ENEM');
-      setSecondsPerQuestion(quizToEdit.secondsPerQuestion || 45);
-      setWarningSeconds(quizToEdit.warningSeconds || 8);
+      setSecondsPerQuestion(quizToEdit.secondsPerQuestion || 120);
+      setWarningSeconds(quizToEdit.warningSeconds || 10);
       setBgMusic(quizToEdit.bgMusic || 'custom');
       setSoundEffects(quizToEdit.soundEffects ?? true);
       setEntranceEffect(((quizToEdit.entranceEffect as any) || 'normal') as any);
@@ -74,8 +74,8 @@ export function QuizModal({ isOpen, onClose, onSuccess, quizToEdit }: QuizModalP
       setTitle('');
       setDescription('');
       setCategory('ENEM');
-      setSecondsPerQuestion(45);
-      setWarningSeconds(8);
+      setSecondsPerQuestion(120);
+      setWarningSeconds(10);
       setBgMusic('custom');
       setSoundEffects(true);
       setEntranceEffect('normal');
@@ -311,7 +311,7 @@ export function QuizModal({ isOpen, onClose, onSuccess, quizToEdit }: QuizModalP
               <Slider
                 value={[secondsPerQuestion]}
                 min={10}
-                max={120}
+                max={300}
                 step={5}
                 onValueChange={(val: any) => {
                   const num = Array.isArray(val) ? val[0] : Number(val);
@@ -328,7 +328,7 @@ export function QuizModal({ isOpen, onClose, onSuccess, quizToEdit }: QuizModalP
               <Slider
                 value={[warningSeconds]}
                 min={3}
-                max={15}
+                max={30}
                 step={1}
                 onValueChange={(val: any) => {
                   const num = Array.isArray(val) ? val[0] : Number(val);

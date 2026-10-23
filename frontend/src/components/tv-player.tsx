@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import confetti from 'canvas-confetti';
 import { Quiz, Question, Alternative } from '@/lib/api';
-import { soundManager } from '@/lib/sound';
+import { soundManager, getYoutubeVideoId } from '@/lib/sound';
 import { Button } from './ui/button';
 import { Badge } from './ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from './ui/dialog';
@@ -42,9 +42,8 @@ export function TvPlayer({ quiz, onExit }: TvPlayerProps) {
   const questions = quiz.questions || [];
   const [currentIndex, setCurrentIndex] = useState(0);
 
-  // Tempo da pergunta: máximo de 15 segundos para dar tempo e chamar atenção com a contagem final
-  const maxQuestionSeconds = 15;
-  const questionDuration = Math.min(quiz.secondsPerQuestion || 15, maxQuestionSeconds);
+  // Duração da pergunta configurada na revisão
+  const questionDuration = quiz.secondsPerQuestion && quiz.secondsPerQuestion > 0 ? quiz.secondsPerQuestion : 60;
   const [timeLeft, setTimeLeft] = useState(questionDuration);
   const [isPaused, setIsPaused] = useState(false);
   const [isRevealed, setIsRevealed] = useState(false);
@@ -84,8 +83,8 @@ export function TvPlayer({ quiz, onExit }: TvPlayerProps) {
   const currentQuestion = questions[currentIndex];
   const totalQuestions = questions.length;
 
-  // Alerta da contagem final nos últimos 10 segundos
-  const warningTime = 10;
+  // Alerta da contagem final configurado na revisão
+  const warningTime = quiz.warningSeconds && quiz.warningSeconds > 0 ? quiz.warningSeconds : 10;
   const isUrgent = timeLeft <= warningTime && timeLeft > 0 && !isRevealed;
 
   // Trigger celebration confetti
@@ -185,6 +184,9 @@ export function TvPlayer({ quiz, onExit }: TvPlayerProps) {
     setIsEntranceFinished(true);
     setEntranceStep(999);
     hasTriggeredFinalCountdownRef.current = false;
+
+    // Interrompe qualquer efeito sonoro da questão anterior (ex: contagem regressiva)
+    soundManager.stopYoutubeAudio('sfx');
 
     // Restaura o volume normal da música de fundo para a nova pergunta
     soundManager.restoreBackgroundMusic();
@@ -330,25 +332,31 @@ export function TvPlayer({ quiz, onExit }: TvPlayerProps) {
 
     if (isRevealed) return;
 
-    // Quando entra nos 10 segundos da contagem final:
-    if (timeLeft <= 10 && !hasTriggeredFinalCountdownRef.current) {
+    // Se o áudio for do YouTube, aciona com antecedência de 2 segundos para compensar a latência de carregamento do player,
+    // garantindo que a fala/efeito soe exatamente no segundo configurado (ex: aos 10s)
+    const isYoutubeCountdown = Boolean(quiz.countdownSoundUrl && getYoutubeVideoId(quiz.countdownSoundUrl));
+    const countdownLeadTime = isYoutubeCountdown ? Math.min(questionDuration, warningTime + 2) : warningTime;
+
+    if (timeLeft <= countdownLeadTime && !hasTriggeredFinalCountdownRef.current) {
       hasTriggeredFinalCountdownRef.current = true;
-      // ZERAR o som da música de fundo para a contagem final ter foco total na TV
-      soundManager.zeroBackgroundMusic();
       if (quiz.soundEffects) {
         soundManager.playCountdownSound(quiz.countdownSoundUrl || undefined);
       }
-    } else if (timeLeft > 10) {
+    }
+
+    // Zerar música de fundo e disparar efeitos exatamente na marca da contagem configurada (ex: aos 10s):
+    if (timeLeft <= warningTime) {
+      soundManager.zeroBackgroundMusic();
+      if (!quiz.countdownSoundUrl && quiz.soundEffects) {
+        // Se não houver áudio customizado de contagem, toca o batimento cardíaco procedural
+        soundManager.playHeartbeat();
+      }
+    } else {
       if (quiz.soundEffects) {
         soundManager.playTickingSound();
       }
-    } else if (!quiz.countdownSoundUrl) {
-      // Se não houver áudio customizado de 10s, toca o batimento cardíaco procedural nos segundos finais
-      if (quiz.soundEffects) {
-        soundManager.playHeartbeat();
-      }
     }
-  }, [timeLeft, isEntranceFinished, isPaused, isRevealed, isCompleted, questions.length, quiz, handleReveal]);
+  }, [timeLeft, isEntranceFinished, isPaused, isRevealed, isCompleted, questions.length, quiz, warningTime, questionDuration, handleReveal]);
 
   // Next Question with Broadcast TV Transition (Plano 5)
   const handleNext = useCallback(() => {
@@ -607,8 +615,8 @@ export function TvPlayer({ quiz, onExit }: TvPlayerProps) {
         <div className="pointer-events-none fixed inset-0 z-30 shadow-[inset_0_0_120px_rgba(239,68,68,0.3)] animate-pulse" />
       )}
 
-      {/* FINAL COUNTDOWN BUBBLE (last 10s): Prominent corner alert that commands attention on TV */}
-      {!showIntro && isEntranceFinished && !isRevealed && !isPaused && timeLeft <= 10 && timeLeft > 0 && (
+      {/* FINAL COUNTDOWN BUBBLE (last warningTime seconds): Prominent corner alert that commands attention on TV */}
+      {!showIntro && isEntranceFinished && !isRevealed && !isPaused && timeLeft <= warningTime && timeLeft > 0 && (
         <div className="pointer-events-none fixed bottom-20 right-6 sm:right-10 z-40 flex flex-col items-center justify-center">
           <span className="text-[10px] sm:text-xs font-black uppercase tracking-widest text-amber-300 drop-shadow-[0_0_10px_rgba(245,158,11,0.9)] mb-1.5 animate-pulse">
             {timeLeft <= 3 ? '🚨 TEMPO ESGOTANDO!' : '⚡ CONTAGEM FINAL'}
