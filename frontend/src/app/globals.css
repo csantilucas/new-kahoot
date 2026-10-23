@@ -249,3 +249,242 @@
   background: rgba(0, 229, 255, 0.7);
 }
 
+/* ===== SHOW DO MILHÃO BROADCAST STUDIO MOTION EFFECTS ===== */
+@keyframes studio-beam-sweep-left {
+  0% {
+    transform: rotate(-28deg) translate3d(0, 0, 0);
+    opacity: 0.22;
+  }
+  50% {
+    transform: rotate(2deg) translate3d(20px, 0, 0);
+    opacity: 0.38;
+  }
+  100% {
+    transform: rotate(-28deg) translate3d(0, 0, 0);
+    opacity: 0.22;
+  }
+}
+
+@keyframes studio-beam-sweep-right {
+  0% {
+    transform: rotate(28deg) translate3d(0, 0, 0);
+    opacity: 0.22;
+  }
+  50% {
+    transform: rotate(-2deg) translate3d(-20px, 0, 0);
+    opacity: 0.38;
+  }
+  100% {
+    transform: rotate(28deg) translate3d(0, 0, 0);
+    opacity: 0.22;
+  }
+}
+
+@keyframes alternative-glint {
+  0% {
+    transform: translateX(-160%) skewX(-25deg);
+    opacity: 0;
+  }
+  15% {
+    opacity: 0.45;
+  }
+  30% {
+    transform: translateX(260%) skewX(-25deg);
+    opacity: 0;
+  }
+  100% {
+    transform: translateX(260%) skewX(-25deg);
+    opacity: 0;
+  }
+}
+
+@keyframes reveal-flash-burst {
+  0% {
+    opacity: 0.85;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes suspense-pulse-ring {
+  0% {
+    box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.7), 0 0 25px rgba(245, 158, 11, 0.4);
+  }
+  70% {
+    box-shadow: 0 0 0 10px rgba(245, 158, 11, 0), 0 0 35px rgba(245, 158, 11, 0.6);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(245, 158, 11, 0), 0 0 25px rgba(245, 158, 11, 0.4);
+  }
+}
+
+@keyframes winner-pulse {
+  0% {
+    box-shadow: 0 0 25px rgba(16, 185, 129, 0.6), inset 0 0 15px rgba(255, 255, 255, 0.3);
+    transform: scale(1.02);
+  }
+  50% {
+    box-shadow: 0 0 45px rgba(16, 185, 129, 0.9), inset 0 0 25px rgba(255, 255, 255, 0.5);
+    transform: scale(1.03);
+  }
+  100% {
+    box-shadow: 0 0 25px rgba(16, 185, 129, 0.6), inset 0 0 15px rgba(255, 255, 255, 0.3);
+    transform: scale(1.02);
+  }
+}
+
+@keyframes question-wipe-in {
+  0% {
+    opacity: 0;
+    transform: scale(0.97) translateY(8px);
+    filter: blur(4px);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+    filter: blur(0);
+  }
+}
+
+.anim-studio-beam-left {
+  animation: studio-beam-sweep-left 14s ease-in-out infinite;
+  will-change: transform, opacity;
+}
+
+.anim-studio-beam-right {
+  animation: studio-beam-sweep-right 16s ease-in-out infinite;
+  will-change: transform, opacity;
+}
+
+.anim-card-glint {
+  animation: alternative-glint 7s cubic-bezier(0.16, 1, 0.3, 1) infinite;
+  will-change: transform, opacity;
+}
+
+.anim-reveal-flash {
+  animation: reveal-flash-burst 500ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  will-change: opacity;
+}
+
+.anim-suspense-focus {
+  animation: suspense-pulse-ring 1.4s ease-out infinite;
+}
+
+.anim-winner-glow {
+  animation: winner-pulse 2s ease-in-out infinite;
+}
+
+.anim-question-enter {
+  animation: question-wipe-in 450ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes question-slide-next {
+  0% {
+    opacity: 0;
+    transform: translate3d(45px, 0, 0) scale(0.98);
+    filter: blur(4px);
+  }
+  100% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+    filter: blur(0);
+  }
+}
+
+@keyframes question-slide-prev {
+  0% {
+    opacity: 0;
+    transform: translate3d(-45px, 0, 0) scale(0.98);
+    filter: blur(4px);
+  }
+  100% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+    filter: blur(0);
+  }
+}
+
+@keyframes tv-wipe-streak {
+  0% {
+    transform: translate3d(-100%, 0, 0);
+    opacity: 0.8;
+  }
+  50% {
+    opacity: 1;
+  }
+  100% {
+    transform: translate3d(200%, 0, 0);
+    opacity: 0;
+  }
+}
+
+@keyframes timer-glow-pulse {
+  0%, 100% {
+    box-shadow: 0 0 20px rgba(0, 229, 255, 0.4), inset 0 0 10px rgba(0, 229, 255, 0.2);
+  }
+  50% {
+    box-shadow: 0 0 35px rgba(0, 229, 255, 0.7), inset 0 0 18px rgba(0, 229, 255, 0.35);
+  }
+}
+
+@keyframes timer-amber-pulse {
+  0%, 100% {
+    box-shadow: 0 0 25px rgba(245, 158, 11, 0.5), inset 0 0 12px rgba(245, 158, 11, 0.25);
+  }
+  50% {
+    box-shadow: 0 0 45px rgba(245, 158, 11, 0.9), inset 0 0 22px rgba(245, 158, 11, 0.45);
+  }
+}
+
+@keyframes timer-red-pulse {
+  0%, 100% {
+    box-shadow: 0 0 30px rgba(239, 68, 68, 0.7), inset 0 0 15px rgba(239, 68, 68, 0.35);
+    transform: scale(1);
+  }
+  50% {
+    box-shadow: 0 0 60px rgba(239, 68, 68, 1), inset 0 0 30px rgba(239, 68, 68, 0.6);
+    transform: scale(1.04);
+  }
+}
+
+.anim-question-next {
+  animation: question-slide-next 400ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  will-change: transform, opacity, filter;
+}
+
+.anim-question-prev {
+  animation: question-slide-prev 400ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  will-change: transform, opacity, filter;
+}
+
+.anim-tv-wipe {
+  animation: tv-wipe-streak 420ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  will-change: transform, opacity;
+}
+
+.anim-timer-cyan {
+  animation: timer-glow-pulse 2.5s ease-in-out infinite;
+}
+
+.anim-timer-amber {
+  animation: timer-amber-pulse 1.2s ease-in-out infinite;
+}
+
+.anim-timer-red {
+  animation: timer-red-pulse 0.7s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .anim-studio-beam-left,
+  .anim-studio-beam-right,
+  .anim-card-glint,
+  .anim-winner-glow,
+  .anim-question-next,
+  .anim-question-prev,
+  .anim-tv-wipe {
+    animation: none !important;
+  }
+}
+
+
