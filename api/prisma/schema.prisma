@@ -1,0 +1,60 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  name      String
+  password  String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Quiz {
+  id                 String     @id @default(uuid())
+  title              String
+  description        String?
+  category           String?
+  secondsPerQuestion Int        @default(30)
+  warningSeconds     Int        @default(5)
+  bgMusic            String     @default("suspense") // "suspense" | "kahoot" | "epic" | "ticking" | "none"
+  soundEffects       Boolean    @default(true)
+  entranceEffect     String     @default("normal") // "normal" | "delay" | "step_by_step"
+  autoReveal         Boolean    @default(false)
+  showExplanation    Boolean    @default(true)
+  customMusicUrl     String?
+  isPublished        Boolean    @default(true)
+  createdAt          DateTime   @default(now())
+  updatedAt          DateTime   @updatedAt
+  questions          Question[]
+}
+
+model Question {
+  id           String        @id @default(uuid())
+  quizId       String
+  quiz         Quiz          @relation(fields: [quizId], references: [id], onDelete: Cascade)
+  order        Int           @default(1)
+  statement    String
+  imageUrl     String?
+  points       Int           @default(100)
+  explanation  String?
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  alternatives Alternative[]
+}
+
+model Alternative {
+  id         String   @id @default(uuid())
+  questionId String
+  question   Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  letter     String   // "A", "B", "C", "D"
+  text       String
+  isCorrect  Boolean  @default(false)
+  color      String   @default("blue") // "red", "blue", "yellow", "green"
+}

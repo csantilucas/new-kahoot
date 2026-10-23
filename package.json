@@ -1,0 +1,16 @@
+{
+  "name": "revisao-monorepo",
+  "version": "1.0.0",
+  "description": "Show da Revisão - Quiz TV Interativo (Show do Milhão + Kahoot)",
+  "private": true,
+  "scripts": {
+    "dev": "npm run dev --prefix api & npm run dev --prefix frontend",
+    "dev:api": "npm run dev --prefix api",
+    "dev:front": "npm run dev --prefix frontend",
+    "db:up": "docker compose up -d",
+    "db:down": "docker compose down",
+    "db:migrate": "npm run prisma:migrate --prefix api",
+    "db:push": "npm run prisma:push --prefix api",
+    "build": "npm run build --prefix api && npm run build --prefix frontend"
+  }
+}
