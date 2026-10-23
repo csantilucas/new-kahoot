@@ -41,25 +41,29 @@ interface TvPlayerProps {
 export function TvPlayer({ quiz, onExit }: TvPlayerProps) {
   const questions = quiz.questions || [];
   const [currentIndex, setCurrentIndex] = useState(0);
-  const [timeLeft, setTimeLeft] = useState(quiz.secondsPerQuestion || 45);
+
+  // Tempo da pergunta: máximo de 15 segundos para dar tempo e chamar atenção com a contagem final
+  const maxQuestionSeconds = 15;
+  const questionDuration = Math.min(quiz.secondsPerQuestion || 15, maxQuestionSeconds);
+  const [timeLeft, setTimeLeft] = useState(questionDuration);
   const [isPaused, setIsPaused] = useState(false);
   const [isRevealed, setIsRevealed] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isCompleted, setIsCompleted] = useState(false);
 
-  // Cinematic Intro Splash Screen (Logo + Title continuously expand until flying past the screen)
-  const [showIntro, setShowIntro] = useState(true);
+  // Entra direto no quiz sem tela de splash/abertura
+  const [showIntro, setShowIntro] = useState(false);
 
   // Entrance Effects: 'normal' | 'delay' | 'step_by_step'
   const [activeEffect, setActiveEffect] = useState<'normal' | 'delay' | 'step_by_step'>(
     ((quiz.entranceEffect as any) || 'normal') as any
   );
-  const [isEntranceFinished, setIsEntranceFinished] = useState(false);
-  const [entranceStep, setEntranceStep] = useState(0);
+  const [isEntranceFinished, setIsEntranceFinished] = useState(true);
+  const [entranceStep, setEntranceStep] = useState(999);
   
-  // Clean Light Mode (default true as requested)
-  const [isLightMode, setIsLightMode] = useState(true);
+  // Tema Show do Milhão TV Studio: cores vibrantes (Navy Profundo + Ciano Elétrico + Violeta Real)
+  const [isLightMode, setIsLightMode] = useState(false);
 
   // Zoom Image modal state
   const [zoomedImage, setZoomedImage] = useState<string | null>(null);
@@ -73,17 +77,22 @@ export function TvPlayer({ quiz, onExit }: TvPlayerProps) {
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const currentQuestion = questions[currentIndex];
   const totalQuestions = questions.length;
-  const warningTime = quiz.warningSeconds || 8;
+
+  // Alerta da contagem final nos últimos 10 segundos
+  const warningTime = 10;
   const isUrgent = timeLeft <= warningTime && timeLeft > 0 && !isRevealed;
 
   // Trigger celebration confetti
   const triggerConfetti = useCallback(() => {
     try {
+      if (quiz.soundEffects) {
+        soundManager.playConfettiSound(quiz.confettiSoundUrl || undefined);
+      }
       confetti({
         particleCount: 80,
         spread: 100,
         origin: { y: 0.6 },
-        colors: ['#10B981', '#3B82F6', '#F59E0B', '#6366F1', '#EC4899'],
+        colors: ['#10B981', '#3B82F6', '#F59E0B', '#6366F1', '#EC4899', '#00E5FF'],
       });
       setTimeout(() => {
         confetti({
@@ -102,7 +111,7 @@ export function TvPlayer({ quiz, onExit }: TvPlayerProps) {
     } catch (e) {
       console.log('Confetti error:', e);
     }
-  }, []);
+  }, [quiz]);
 
   // Skip / End Intro sequence
   const skipIntro = useCallback(() => {
@@ -163,28 +172,36 @@ export function TvPlayer({ quiz, onExit }: TvPlayerProps) {
   // Initialize or reset question state
   const resetQuestionState = useCallback((index: number, skipMusic = false) => {
     if (timerRef.current) clearInterval(timerRef.current);
-    setTimeLeft(quiz.secondsPerQuestion || 45);
+    setTimeLeft(questionDuration);
     setIsPaused(false);
     setIsRevealed(false);
     setZoomedImage(null);
-    setIsEntranceFinished(false);
-    setEntranceStep(0);
+    setIsEntranceFinished(true);
+    setEntranceStep(999);
 
     if (!skipMusic && quiz.bgMusic && quiz.bgMusic !== 'none') {
       soundManager.startBackgroundMusic(quiz.bgMusic, quiz.customMusicUrl || undefined);
     }
-  }, [quiz]);
+  }, [quiz, questionDuration]);
 
   // Load question
   useEffect(() => {
     if (questions.length === 0) return;
-    resetQuestionState(currentIndex, showIntro);
+    resetQuestionState(currentIndex, false);
 
+    return () => {
+      if (timerRef.current) clearInterval(timerRef.current);
+      // Mantém a música tocando continuamente entre a passagem de perguntas
+    };
+  }, [currentIndex, questions.length, resetQuestionState]);
+
+  // Parar trilha sonora e timers ao sair da TV (desmontagem do componente)
+  useEffect(() => {
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
       soundManager.stopBackgroundMusic();
     };
-  }, [currentIndex, questions.length, showIntro, resetQuestionState]);
+  }, []);
 
   // Orchestrate Entrance Effects on question load or effect change (only after intro)
   useEffect(() => {
@@ -235,19 +252,19 @@ export function TvPlayer({ quiz, onExit }: TvPlayerProps) {
   const handleReveal = useCallback((isTimeUp = false) => {
     setIsRevealed((prev) => {
       if (prev) return prev; // already revealed
-      soundManager.stopBackgroundMusic();
+      // Mantém o áudio/efeito de tensão de fundo tocando em loop contínuo sem pausas
 
       if (quiz.soundEffects) {
         if (isTimeUp) {
-          soundManager.playTimeUpBuzzer();
+          soundManager.playTimeUpBuzzer(quiz.timeUpSoundUrl || undefined);
           setTimeout(() => {
-            soundManager.playCorrectAnswer();
+            soundManager.playCorrectAnswer(quiz.correctSoundUrl || undefined);
             triggerConfetti();
           }, 600);
         } else {
           soundManager.playRevealSuspense();
           setTimeout(() => {
-            soundManager.playCorrectAnswer();
+            soundManager.playCorrectAnswer(quiz.correctSoundUrl || undefined);
             triggerConfetti();
           }, 350);
         }
@@ -257,7 +274,7 @@ export function TvPlayer({ quiz, onExit }: TvPlayerProps) {
 
       return true;
     });
-  }, [quiz.soundEffects, triggerConfetti]);
+  }, [quiz, triggerConfetti]);
 
   // Countdown timer loop - ONLY runs after entrance finishes!
   useEffect(() => {
@@ -277,7 +294,7 @@ export function TvPlayer({ quiz, onExit }: TvPlayerProps) {
         const next = prev - 1;
         if (quiz.soundEffects) {
           if (next <= 10) {
-            soundManager.playCountdownSound();
+            soundManager.playCountdownSound(quiz.countdownSoundUrl || undefined);
           } else if (next <= warningTime) {
             soundManager.playHeartbeat();
           } else {
@@ -318,7 +335,8 @@ export function TvPlayer({ quiz, onExit }: TvPlayerProps) {
   const handleRestart = () => {
     setIsCompleted(false);
     setCurrentIndex(0);
-    setShowIntro(true);
+    setShowIntro(false);
+    resetQuestionState(0, false);
   };
 
   // Toggle Fullscreen
@@ -471,309 +489,292 @@ export function TvPlayer({ quiz, onExit }: TvPlayerProps) {
     );
   }
 
-  // Badges for alternatives (a, b, c, d, e) - circular badge with brand identity
+  // Badges for alternatives (a, b, c, d, e) - Electric Cyan / Gold TV Studio styling
   const getBadgeStyle = (alt: Alternative) => {
     if (isRevealed) {
       if (alt.isCorrect) {
-        return 'bg-white text-emerald-800 shadow-md font-black ring-2 ring-emerald-300 scale-105 transition-transform duration-300';
+        return 'bg-white text-emerald-900 shadow-[0_0_15px_rgba(255,255,255,0.8)] font-black ring-2 ring-emerald-300 scale-110 transition-transform duration-300';
       }
-      return 'opacity-25 bg-slate-200 text-slate-400 border-transparent transition-opacity duration-300';
+      return 'opacity-20 bg-slate-800 text-slate-500 border-transparent transition-opacity duration-300';
     }
 
-    return 'bg-[#3702B3] text-white font-black shadow-xs';
+    return 'bg-gradient-to-br from-[#00E5FF] to-cyan-500 text-slate-950 font-black shadow-[0_0_12px_rgba(0,229,255,0.6)] ring-1 ring-cyan-200';
   };
 
-  // Card styles for alternatives: rounded pill shape matching structure, colors: pure White and Blue #3702B3
-  // Pure presentation mode: no answer selecting / click hover states
+  // Card styles for alternatives: Deep Violet & Navy Blue game show styling (matching user image)
   const getAlternativeCardStyles = (alt: Alternative) => {
     if (isRevealed) {
       if (alt.isCorrect) {
-        return 'bg-gradient-to-r from-emerald-600 to-emerald-500 text-white border-2 border-emerald-400 shadow-xl font-bold ring-4 ring-emerald-400/40 scale-[1.02] cursor-default transition-all duration-500';
+        return 'bg-gradient-to-r from-emerald-600 via-teal-500 to-emerald-600 text-white border-2 border-emerald-300 shadow-[0_0_35px_rgba(16,185,129,0.7)] font-bold ring-4 ring-emerald-400/50 scale-[1.02] cursor-default transition-all duration-500';
       } else {
-        return isLightMode
-          ? 'opacity-25 bg-white border-2 border-slate-200 text-slate-400 scale-[0.99] cursor-default transition-all duration-500'
-          : 'opacity-20 bg-slate-900 border-2 border-slate-800 text-slate-500 scale-[0.99] cursor-default transition-all duration-500';
+        return 'opacity-20 bg-[#081024]/80 border-2 border-slate-800 text-slate-500 scale-[0.99] cursor-default transition-all duration-500';
       }
     }
 
-    return isLightMode
-      ? 'bg-white border-2 border-slate-200 text-slate-900 shadow-xs cursor-default'
-      : 'bg-slate-900 border-2 border-slate-800 text-slate-100 shadow-xs cursor-default';
+    return 'bg-gradient-to-r from-[#22104e]/95 via-[#1b1446]/95 to-[#0e193a]/95 border-2 border-indigo-400/40 hover:border-[#00E5FF] text-white shadow-md hover:shadow-[0_0_18px_rgba(0,229,255,0.3)] cursor-default transition-all duration-200';
   };
 
   return (
     <div
-      className={`relative h-screen max-h-screen overflow-hidden w-full flex flex-col justify-between select-none transition-colors duration-200 border-[3px] border-[#3702B3] ${
-        isLightMode
-          ? 'bg-white text-slate-900'
-          : 'bg-[#080d1a] text-slate-100'
-      }`}
+      className="relative h-screen max-h-screen overflow-hidden w-full flex flex-col justify-between select-none bg-gradient-to-br from-[#051124] via-[#091b38] to-[#040e20] text-slate-100 border-[3px] border-[#00E5FF]/40 shadow-[0_0_40px_rgba(0,229,255,0.2)]"
     >
-      {/* TOP TIME BAR: drains smoothly; turns amber/red with shimmer near the end */}
+      {/* Top Electric Cyan Accent Line matching attached reference image */}
+      <div className="absolute top-0 left-0 right-0 h-1 z-50 bg-gradient-to-r from-[#00E5FF] via-cyan-300 to-[#00E5FF] shadow-[0_0_16px_rgba(0,229,255,0.9)]" />
+
+      {/* TOP TIME BAR: drains smoothly from 15s to 0s; turns amber/red with shimmer in last 10s */}
       {!showIntro && (
-        <div className="absolute top-0 left-0 right-0 h-1.5 z-40 bg-slate-200/60 dark:bg-slate-800/60 overflow-hidden">
+        <div className="absolute top-1 left-0 right-0 h-1.5 z-40 bg-slate-900/80 overflow-hidden">
           <div
             className={`h-full origin-left transition-[width,background-color] duration-1000 ease-linear ${
               isRevealed
                 ? 'bg-emerald-500'
-                : timeLeft <= 5
-                ? 'bg-gradient-to-r from-red-500 via-rose-400 to-red-500 anim-bar-shimmer'
+                : timeLeft <= 3
+                ? 'bg-gradient-to-r from-red-500 via-rose-400 to-red-500 anim-bar-shimmer shadow-[0_0_12px_rgba(239,68,68,0.8)]'
                 : isUrgent
-                ? 'bg-gradient-to-r from-amber-500 via-yellow-300 to-amber-500 anim-bar-shimmer'
-                : 'bg-[#3702B3]'
+                ? 'bg-gradient-to-r from-amber-500 via-yellow-300 to-orange-500 anim-bar-shimmer shadow-[0_0_12px_rgba(245,158,11,0.8)]'
+                : 'bg-gradient-to-r from-cyan-400 via-[#00E5FF] to-blue-500 shadow-[0_0_12px_rgba(0,229,255,0.8)]'
             }`}
-            style={{ width: `${isEntranceFinished ? Math.max(0, (timeLeft / (quiz.secondsPerQuestion || 45)) * 100) : 100}%` }}
+            style={{ width: `${isEntranceFinished ? Math.max(0, (timeLeft / questionDuration) * 100) : 100}%` }}
           />
         </div>
       )}
 
-      {/* FINAL COUNTDOWN BUBBLE (last 5s): corner only, never covers the question */}
-      {!showIntro && isEntranceFinished && !isRevealed && !isPaused && timeLeft <= 5 && timeLeft > 0 && (
-        <div className="pointer-events-none fixed bottom-20 right-6 sm:right-10 z-40 flex items-center justify-center w-24 h-24 sm:w-28 sm:h-28">
-          <span className={`absolute inset-0 rounded-full anim-final-ring ${timeLeft <= 3 ? 'bg-red-500/40' : 'bg-amber-400/40'}`} />
-          <div
-            className={`relative w-full h-full rounded-full flex items-center justify-center shadow-2xl border-4 border-white ${
-              timeLeft <= 3 ? 'bg-gradient-to-br from-red-500 to-rose-600' : 'bg-gradient-to-br from-amber-400 to-orange-500'
-            }`}
-          >
-            <span key={timeLeft} className="anim-final-num text-5xl sm:text-6xl font-black text-white tabular-nums drop-shadow">
-              {timeLeft}
-            </span>
+      {/* Warning Screen Edge Pulse during the final 10 seconds */}
+      {!showIntro && isEntranceFinished && !isRevealed && !isPaused && isUrgent && (
+        <div className="pointer-events-none fixed inset-0 z-30 shadow-[inset_0_0_120px_rgba(239,68,68,0.3)] animate-pulse" />
+      )}
+
+      {/* FINAL COUNTDOWN BUBBLE (last 10s): Prominent corner alert that commands attention on TV */}
+      {!showIntro && isEntranceFinished && !isRevealed && !isPaused && timeLeft <= 10 && timeLeft > 0 && (
+        <div className="pointer-events-none fixed bottom-20 right-6 sm:right-10 z-40 flex flex-col items-center justify-center">
+          <span className="text-[10px] sm:text-xs font-black uppercase tracking-widest text-amber-300 drop-shadow-[0_0_10px_rgba(245,158,11,0.9)] mb-1.5 animate-pulse">
+            {timeLeft <= 3 ? '🚨 TEMPO ESGOTANDO!' : '⚡ CONTAGEM FINAL'}
+          </span>
+          <div className="relative flex items-center justify-center w-24 h-24 sm:w-32 sm:h-32">
+            <span className={`absolute inset-0 rounded-full anim-final-ring ${timeLeft <= 3 ? 'bg-red-500/50' : 'bg-amber-400/40'}`} />
+            <span className={`absolute -inset-2 rounded-full animate-ping opacity-40 ${timeLeft <= 3 ? 'bg-red-500' : 'bg-amber-400'}`} />
+            <div
+              className={`relative w-full h-full rounded-full flex items-center justify-center shadow-[0_0_40px_rgba(239,68,68,0.7)] border-4 ${
+                timeLeft <= 3
+                  ? 'bg-gradient-to-br from-red-600 via-rose-600 to-red-700 border-white text-white'
+                  : 'bg-gradient-to-br from-amber-500 via-orange-500 to-red-500 border-white text-white'
+              }`}
+            >
+              <span key={timeLeft} className="anim-final-num text-5xl sm:text-7xl font-black text-white tabular-nums drop-shadow-[0_4px_16px_rgba(0,0,0,0.8)]">
+                {timeLeft}
+              </span>
+            </div>
           </div>
         </div>
       )}
+
       {/* TOP HEADER */}
       <header
-        className={`relative z-20 px-4 sm:px-6 py-2 flex items-center justify-between border-b backdrop-blur-md shrink-0 transition-colors ${
-          isLightMode
-            ? 'bg-white/95 border-slate-200 text-slate-800 shadow-xs'
-            : 'bg-slate-950/80 border-slate-800 text-white'
-        }`}
+        className="relative z-20 px-4 sm:px-6 md:px-8 lg:px-12 py-2.5 border-b border-cyan-500/30 bg-[#06142e]/95 backdrop-blur-md shrink-0 shadow-lg"
       >
-        <div className="flex items-center gap-3">
-          <Badge
-            variant="default"
-            className="text-xs px-2.5 py-0.5 font-bold uppercase tracking-wider bg-[#3702B3] text-white hover:bg-[#3702B3]"
-          >
-            ENEM
-          </Badge>
-          <span className="font-semibold text-sm hidden sm:inline truncate max-w-xs md:max-w-md">
-            {quiz.title}
-          </span>
-          {quiz.category && (
-            <span className={`text-xs hidden md:inline px-2 py-0.5 rounded-full border ${
-              isLightMode ? 'bg-slate-100 border-slate-200 text-slate-600' : 'bg-slate-900 border-slate-800 text-slate-400'
-            }`}>
-              {quiz.category}
+        <div className="w-full max-w-[1850px] mx-auto flex items-center justify-between">
+        <div className="flex items-center gap-3 sm:gap-4">
+          {/* Show do Milhão TV Logo (Cropped & Large) */}
+          <img
+            src="/show_milhao-cropped.png"
+            alt="Show do Milhão"
+            className="h-11 sm:h-13 md:h-15 w-auto object-contain drop-shadow-[0_4px_16px_rgba(255,215,0,0.4)] transition-transform hover:scale-105"
+            onError={(e) => {
+              (e.target as HTMLImageElement).src = "/show_milhao.png";
+            }}
+          />
+
+          {/* Quiz Title & Category */}
+          <div className="hidden sm:flex flex-col justify-center">
+            <span className="font-black text-sm md:text-base text-white tracking-tight truncate max-w-xs md:max-w-md drop-shadow">
+              {quiz.title}
             </span>
-          )}
+            {quiz.category && (
+              <span className="text-[10px] md:text-xs font-bold text-[#00E5FF] uppercase tracking-wider drop-shadow-[0_0_8px_rgba(0,229,255,0.6)]">
+                {quiz.category}
+              </span>
+            )}
+          </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 sm:gap-3">
+          {/* Institutional Favoo Logo in Header (Crisp and Well-sized) */}
+          <div className="hidden md:flex items-center px-2.5 py-1 rounded-xl bg-white/95 border border-cyan-400/40 shadow-sm">
+            <img
+              src="/logo-cropped.png"
+              alt="Favoo"
+              className="h-6 sm:h-7 w-auto object-contain"
+              onError={(e) => {
+                (e.target as HTMLImageElement).src = "/logo.png";
+              }}
+            />
+          </div>
+
           {/* Question Index Badge */}
-          <div className={`px-3 py-1 rounded-lg border text-xs font-bold flex items-center gap-1.5 ${
-            isLightMode ? 'bg-slate-50 border-slate-200 text-slate-700' : 'bg-slate-900 border-slate-700 text-slate-200'
-          }`}>
-            <BookOpen className="h-3.5 w-3.5 text-[#3702B3]" />
+          <div className="px-3 py-1 rounded-xl border border-cyan-400/40 bg-cyan-950/60 text-xs font-black text-[#00E5FF] flex items-center gap-1.5 shadow-[0_0_10px_rgba(0,229,255,0.2)]">
+            <BookOpen className="h-3.5 w-3.5 text-[#00E5FF]" />
             <span>{currentIndex + 1} / {totalQuestions}</span>
           </div>
 
-          {/* Entrance Status or Countdown Timer (Only runs after entrance finishes!) */}
-          {!isEntranceFinished ? (
-            <button
-              type="button"
-              onClick={finishEntrance}
-              className="flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold bg-[#3702B3]/10 text-[#3702B3] border border-[#3702B3]/30 hover:bg-[#3702B3]/20 transition-all cursor-pointer shadow-xs animate-pulse"
-              title="Animação de entrada em andamento. Clique para iniciar o tempo agora (ou aperte Enter)"
-            >
-              <Play className="h-3.5 w-3.5 fill-current text-[#3702B3]" />
-              <span className="hidden sm:inline">
-                {activeEffect === 'normal' && 'Carregando...'}
-                {activeEffect === 'delay' && 'Leitura (Iniciar Tempo)'}
-                {activeEffect === 'step_by_step' && `Apresentando (${Math.min(entranceStep, currentQuestion?.alternatives?.length || 4)}/${currentQuestion?.alternatives?.length || 4}) - Iniciar`}
+          {/* Live Countdown Progress Ring */}
+          <div className="flex items-center gap-2">
+            {isPaused && (
+              <span className="text-[11px] sm:text-xs font-black px-2.5 py-0.5 rounded-lg bg-amber-500 text-slate-950 shadow-md">
+                PAUSADO
               </span>
-              <span className="sm:hidden">Iniciar</span>
-              <span className="px-1.5 py-0.5 rounded bg-[#3702B3] text-white text-[10px] font-mono">
-                {timeLeft}s
+            )}
+            {isRevealed && (
+              <span className="text-[11px] sm:text-xs font-black px-2.5 py-0.5 rounded-lg bg-emerald-500 text-slate-950 shadow-md flex items-center gap-1 animate-in zoom-in-75 duration-200">
+                <Sparkles className="h-3 w-3 text-slate-950" /> Revelada
               </span>
-            </button>
-          ) : (
-            <div className="flex items-center gap-2">
-              {isPaused && (
-                <span className="text-[11px] sm:text-xs font-semibold px-2 py-0.5 rounded bg-amber-100 text-amber-800">
-                  PAUSADO
-                </span>
-              )}
-              {isRevealed && (
-                <span className="text-[11px] sm:text-xs font-bold px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 border border-emerald-300 flex items-center gap-1 animate-in zoom-in-75 duration-200">
-                  <Sparkles className="h-3 w-3 text-emerald-600" /> Revelada
-                </span>
-              )}
+            )}
 
-              {/* Radial Progress Ring & Pulsing Countdown */}
-              <div
-                className={`flex items-center gap-2 px-2.5 py-1 rounded-xl font-bold border transition-all text-xs shadow-xs ${
-                  isRevealed
-                    ? 'bg-emerald-50 dark:bg-emerald-950/60 border-emerald-300 dark:border-emerald-700 text-emerald-800 dark:text-emerald-200'
-                    : timeLeft <= 3
-                    ? 'bg-red-500 text-white border-red-600 shadow-md ring-2 ring-red-400/50'
-                    : isUrgent
-                    ? 'bg-amber-500 text-white border-amber-600 shadow-xs'
-                    : 'bg-[#3702B3]/10 border-[#3702B3]/25 text-[#3702B3]'
+            <div
+              className={`flex items-center gap-2 px-3 py-1 rounded-xl font-black border transition-all text-xs shadow-md ${
+                isRevealed
+                  ? 'bg-emerald-950/80 border-emerald-500 text-emerald-300'
+                  : timeLeft <= 3
+                  ? 'bg-red-600 text-white border-red-400 shadow-[0_0_20px_rgba(239,68,68,0.8)] ring-2 ring-red-400/60 animate-pulse'
+                  : isUrgent
+                  ? 'bg-amber-500 text-slate-950 border-amber-300 shadow-[0_0_15px_rgba(245,158,11,0.7)] animate-pulse'
+                  : 'bg-cyan-950/80 border-cyan-400/60 text-[#00E5FF] shadow-[0_0_12px_rgba(0,229,255,0.3)]'
+              }`}
+            >
+              {/* SVG Radial Ring */}
+              <div className="relative w-5 h-5 sm:w-6 sm:h-6 flex items-center justify-center shrink-0">
+                <svg className="w-5 h-5 sm:w-6 sm:h-6 -rotate-90 transform" viewBox="0 0 28 28">
+                  <circle
+                    cx="14"
+                    cy="14"
+                    r="10.5"
+                    stroke="currentColor"
+                    strokeWidth="2.5"
+                    fill="transparent"
+                    className="opacity-25"
+                  />
+                  <circle
+                    cx="14"
+                    cy="14"
+                    r="10.5"
+                    stroke="currentColor"
+                    strokeWidth="2.5"
+                    strokeDasharray={2 * Math.PI * 10.5}
+                    strokeDashoffset={
+                      2 * Math.PI * 10.5 * (1 - Math.max(0, Math.min(1, timeLeft / questionDuration)))
+                    }
+                    strokeLinecap="round"
+                    fill="transparent"
+                    className="transition-all duration-1000 ease-linear"
+                  />
+                </svg>
+                <Clock className={`absolute h-2.5 w-2.5 ${timeLeft <= 3 && !isRevealed ? 'animate-pulse' : ''}`} />
+              </div>
+
+              {/* Pop / Pulse Number on Tick */}
+              <span
+                key={timeLeft}
+                className={`text-xs sm:text-sm font-black font-mono tracking-tight ${
+                  timeLeft <= 10 && !isRevealed
+                    ? 'inline-block animate-in zoom-in-125 duration-200'
+                    : ''
                 }`}
               >
-                {/* SVG Radial Ring */}
-                <div className="relative w-5 h-5 sm:w-6 sm:h-6 flex items-center justify-center shrink-0">
-                  <svg className="w-5 h-5 sm:w-6 sm:h-6 -rotate-90 transform" viewBox="0 0 28 28">
-                    <circle
-                      cx="14"
-                      cy="14"
-                      r="10.5"
-                      stroke="currentColor"
-                      strokeWidth="2.5"
-                      fill="transparent"
-                      className="opacity-20"
-                    />
-                    <circle
-                      cx="14"
-                      cy="14"
-                      r="10.5"
-                      stroke="currentColor"
-                      strokeWidth="2.5"
-                      strokeDasharray={2 * Math.PI * 10.5}
-                      strokeDashoffset={
-                        2 * Math.PI * 10.5 * (1 - Math.max(0, Math.min(100, timeLeft / (quiz.secondsPerQuestion || 45))))
-                      }
-                      strokeLinecap="round"
-                      fill="transparent"
-                      className="transition-all duration-1000 ease-linear"
-                    />
-                  </svg>
-                  <Clock className={`absolute h-2.5 w-2.5 ${timeLeft <= 3 && !isRevealed ? 'animate-pulse' : ''}`} />
-                </div>
-
-                {/* Pop / Pulse Number on Tick */}
-                <span
-                  key={timeLeft}
-                  className={`text-xs sm:text-sm font-black font-mono tracking-tight ${
-                    timeLeft <= 5 && !isRevealed
-                      ? 'inline-block animate-in zoom-in-125 duration-200'
-                      : ''
-                  }`}
-                >
-                  {timeLeft}s
-                </span>
-              </div>
+                {timeLeft}s
+              </span>
             </div>
-          )}
+          </div>
 
-          {/* Audio Config Modal Button */}
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setIsAudioModalOpen(true)}
-            className="h-8 px-2 text-xs gap-1 border-[#3702B3]/30 text-[#3702B3] hover:bg-[#3702B3]/5"
-            title="Cadastrar e Configurar Áudios Próprios"
-          >
-            <Music className="h-3.5 w-3.5" />
-            <span className="hidden sm:inline">Áudios</span>
-          </Button>
+          {/* Action buttons (Font Size, Sound, Fullscreen, Exit) */}
+          <div className="flex items-center gap-1.5 pl-1 border-l border-cyan-500/30">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setIsLargeFont(prev => !prev)}
+              className="h-8 px-2 text-xs gap-1 bg-slate-900 border-cyan-500/40 text-cyan-200 hover:text-white hover:bg-slate-800"
+              title="Alternar tamanho da fonte para a TV"
+            >
+              <Type className="h-3.5 w-3.5 text-[#00E5FF]" />
+              <span>{isLargeFont ? 'A+' : 'A'}</span>
+            </Button>
 
-          {/* Font Size Toggle */}
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setIsLargeFont(prev => !prev)}
-            className={`h-8 px-2 text-xs gap-1 ${
-              isLightMode ? 'bg-slate-100 border-slate-300 text-slate-700' : 'bg-slate-900 border-slate-700 text-slate-300'
-            }`}
-            title="Alternar tamanho da fonte para a TV"
-          >
-            <Type className="h-3.5 w-3.5" />
-            <span>{isLargeFont ? 'A+' : 'A'}</span>
-          </Button>
+            <Button
+              variant="outline"
+              size="icon"
+              className="h-8 w-8 rounded-lg border border-cyan-500/40 bg-slate-900 text-cyan-200 hover:text-white hover:bg-slate-800"
+              onClick={handleToggleMute}
+              title={isMuted ? "Ativar Áudio" : "Silenciar Áudio"}
+            >
+              {isMuted ? <VolumeX className="h-4 w-4 text-destructive" /> : <Volume2 className="h-4 w-4 text-[#00E5FF]" />}
+            </Button>
 
-          {/* Toggle Light / Dark Mode */}
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setIsLightMode(prev => !prev)}
-            className={`h-8 px-2.5 text-xs gap-1.5 ${
-              isLightMode
-                ? 'bg-slate-100 border-slate-300 text-slate-700 hover:bg-slate-200'
-                : 'bg-slate-900 border-slate-700 text-slate-300 hover:text-white'
-            }`}
-            title="Alternar entre Claro e Noturno (Tecla T)"
-          >
-            {isLightMode ? <Moon className="h-3.5 w-3.5" /> : <Sun className="h-3.5 w-3.5 text-amber-400" />}
-            <span className="hidden sm:inline">{isLightMode ? 'Escuro' : 'Claro'}</span>
-          </Button>
+            <Button
+              variant="outline"
+              size="icon"
+              className="h-8 w-8 rounded-lg border border-cyan-500/40 bg-slate-900 text-cyan-200 hover:text-white hover:bg-slate-800"
+              onClick={toggleFullscreen}
+              title="Tela Cheia (F)"
+            >
+              {isFullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4 text-[#00E5FF]" />}
+            </Button>
 
-          {/* Sound Toggle */}
-          <Button
-            variant="outline"
-            size="icon"
-            className={`h-8 w-8 rounded-lg border ${
-              isLightMode
-                ? 'bg-slate-100 border-slate-300 text-slate-700 hover:bg-slate-200'
-                : 'bg-slate-900 border-slate-700 text-slate-300 hover:text-white'
-            }`}
-            onClick={handleToggleMute}
-            title={isMuted ? "Ativar Áudio" : "Silenciar Áudio"}
-          >
-            {isMuted ? <VolumeX className="h-4 w-4 text-destructive" /> : <Volume2 className="h-4 w-4 text-[#3702B3]" />}
-          </Button>
-
-          {/* Fullscreen */}
-          <Button
-            variant="outline"
-            size="icon"
-            className={`h-8 w-8 rounded-lg border ${
-              isLightMode
-                ? 'bg-slate-100 border-slate-300 text-slate-700 hover:bg-slate-200'
-                : 'bg-slate-900 border-slate-700 text-slate-300 hover:text-white'
-            }`}
-            onClick={toggleFullscreen}
-            title="Tela Cheia (F)"
-          >
-            {isFullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
-          </Button>
-
-          {/* Exit */}
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-8 w-8 rounded-lg text-slate-400 hover:text-destructive hover:bg-destructive/10"
-            onClick={onExit}
-            title="Sair do Modo TV"
-          >
-            <X className="h-4 w-4" />
-          </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 rounded-lg text-slate-400 hover:text-destructive hover:bg-destructive/10"
+              onClick={onExit}
+              title="Sair do Modo TV"
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
         </div>
       </header>
 
-      {/* CENTER STAGE: EXACT MATCH TO USER MOCKUPS */}
-      <main className="relative z-10 flex-1 min-h-0 px-4 sm:px-6 lg:px-10 py-3 sm:py-4 max-w-7xl mx-auto w-full flex flex-col justify-center overflow-hidden">
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 lg:gap-8 items-stretch w-full max-h-full min-h-0">
+      {/* CENTER STAGE: EXACT MATCH TO USER MOCKUPS WITH LATERAL RESPONSIVENESS */}
+      <main className="relative z-10 flex-1 min-h-0 px-4 sm:px-6 md:px-8 lg:px-12 xl:px-14 py-2 sm:py-3 w-full max-w-[1850px] mx-auto flex flex-col justify-center overflow-hidden">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 lg:gap-7 xl:gap-9 items-stretch w-full max-h-full min-h-0">
           
-          {/* LEFT COLUMN: LARGE ROUNDED STATEMENT CARD (MOCKUP STYLE) */}
-          <div className={`lg:col-span-6 xl:col-span-7 flex flex-col min-h-0 h-full transition-all duration-600 ease-out ${
+          {/* LEFT COLUMN: LARGE ROUNDED STATEMENT CARD (SHOW DO MILHÃO THEME) */}
+          <div className={`${
+            currentQuestion.imageUrl
+              ? 'lg:col-span-6 xl:col-span-7 2xl:col-span-7'
+              : 'lg:col-span-7 xl:col-span-8 2xl:col-span-8'
+          } flex flex-col min-h-0 h-full transition-all duration-600 ease-out ${
             activeEffect === 'step_by_step'
               ? (entranceStep >= 0 ? 'opacity-100 translate-x-0' : 'opacity-0 -translate-x-16')
               : 'opacity-100 translate-x-0'
           }`}>
             <div
-              className={`p-6 sm:p-7 md:p-8 rounded-[24px] md:rounded-[28px] transition-colors shadow-sm flex-1 min-h-0 flex flex-col justify-center max-h-[calc(100vh-140px)] overflow-hidden ${
-                isLightMode
-                  ? 'bg-white text-slate-900 border-2 border-slate-200/90'
-                  : 'bg-slate-900 border-2 border-slate-800 text-slate-100'
-              }`}
+              className="p-5 sm:p-6 md:p-7 lg:p-8 xl:p-9 rounded-[28px] md:rounded-[32px] transition-all flex-1 min-h-0 flex flex-col justify-center max-h-[calc(100vh-135px)] overflow-hidden bg-gradient-to-br from-[#1c0f42] via-[#161245] to-[#0a1532] border-2 border-cyan-400/40 shadow-[0_12px_40px_rgba(0,0,0,0.6),0_0_25px_rgba(0,229,255,0.18)] text-white"
             >
-              {/* Question Statement Text */}
-              <div className="flex-1 min-h-0 overflow-y-auto pr-1 flex flex-col justify-center">
-                <p className={`font-normal leading-relaxed whitespace-pre-line text-left ${
-                  isLargeFont ? 'text-base sm:text-lg md:text-xl' : 'text-sm sm:text-base md:text-[17px]'
-                } ${isLightMode ? 'text-slate-900' : 'text-slate-100'}`}>
+              {/* Question Header Banner matching user's attached reference */}
+              <div className="flex items-center justify-between pb-3 mb-3 border-b-2 border-cyan-400/30 shrink-0">
+                <div className="flex items-baseline gap-2.5">
+                  <span className="text-xs sm:text-sm font-black tracking-[0.25em] text-[#00E5FF] uppercase drop-shadow-[0_0_12px_rgba(0,229,255,0.7)]">
+                    QUESTÃO
+                  </span>
+                  <span className="text-3xl sm:text-4xl md:text-5xl font-black text-[#00E5FF] tracking-tight drop-shadow-[0_0_16px_rgba(0,229,255,0.8)] font-mono">
+                    {String(currentIndex + 1).padStart(2, '0')}
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-[11px] sm:text-xs font-bold text-cyan-200 bg-cyan-950/70 border border-cyan-400/40 px-3 py-1 rounded-full shadow-[0_0_10px_rgba(0,229,255,0.2)]">
+                    {quiz.category || 'ENEM'}
+                  </span>
+                  <span className="text-[11px] sm:text-xs font-semibold text-slate-300 bg-slate-900/70 px-2.5 py-1 rounded-full border border-slate-700">
+                    {currentIndex + 1} de {totalQuestions}
+                  </span>
+                </div>
+              </div>
+
+              {/* Question Statement Text with Lateral Responsiveness */}
+              <div className="flex-1 min-h-0 overflow-y-auto pr-2 custom-tv-scrollbar flex flex-col justify-center">
+                <p className={`font-medium leading-relaxed whitespace-pre-line text-left text-slate-100 ${
+                  isLargeFont
+                    ? 'text-base sm:text-lg md:text-xl lg:text-2xl'
+                    : 'text-sm sm:text-base md:text-[16px] lg:text-[17px] xl:text-[18px] 2xl:text-[20px]'
+                }`}>
                   {currentQuestion.statement}
                 </p>
               </div>
@@ -781,17 +782,17 @@ export function TvPlayer({ quiz, onExit }: TvPlayerProps) {
           </div>
 
           {/* RIGHT COLUMN: IMAGE ON TOP (IF PRESENT) + ALTERNATIVES UNDERNEATH */}
-          <div className="lg:col-span-6 xl:col-span-5 flex flex-col justify-center gap-2.5 sm:gap-3 min-h-0 h-full">
+          <div className={`${
+            currentQuestion.imageUrl
+              ? 'lg:col-span-6 xl:col-span-5 2xl:col-span-5'
+              : 'lg:col-span-5 xl:col-span-4 2xl:col-span-4'
+          } flex flex-col justify-center gap-2.5 sm:gap-3 min-h-0 h-full`}>
             
             {/* IMAGE CARD (DIRECTLY ON TOP OF ALTERNATIVES AS IN USER MOCKUP) */}
             {currentQuestion.imageUrl && (
               <div
                 onClick={() => setZoomedImage(currentQuestion.imageUrl || null)}
-                className={`relative group cursor-pointer rounded-[20px] md:rounded-[24px] overflow-hidden bg-white border-2 border-slate-200/90 shadow-xs p-2 sm:p-2.5 max-h-48 sm:max-h-56 md:max-h-64 lg:max-h-72 flex items-center justify-center shrink-0 w-full transition-all duration-300 ${
-                  activeEffect === 'delay' && !isEntranceFinished && entranceStep === 0
-                    ? 'opacity-70 scale-[0.98]'
-                    : 'opacity-100 scale-100'
-                }`}
+                className="relative group cursor-pointer rounded-[22px] overflow-hidden bg-[#0c1836] border-2 border-cyan-400/40 shadow-xl p-2.5 max-h-48 sm:max-h-56 md:max-h-64 lg:max-h-72 flex items-center justify-center shrink-0 w-full transition-all duration-300 hover:border-cyan-300"
                 title="Clique para ampliar a imagem na TV (ou aperte a tecla Z)"
               >
                 <img
@@ -799,7 +800,7 @@ export function TvPlayer({ quiz, onExit }: TvPlayerProps) {
                   alt="Imagem de apoio da questão"
                   className="max-h-44 sm:max-h-52 md:max-h-60 lg:max-h-64 w-auto max-w-full object-contain object-center transition-transform group-hover:scale-[1.01]"
                 />
-                <div className="absolute bottom-2 right-2 px-2.5 py-1 bg-black/75 text-white text-[10px] md:text-xs rounded-lg flex items-center gap-1.5 opacity-80 group-hover:opacity-100 transition-opacity font-medium pointer-events-none shadow-xs">
+                <div className="absolute bottom-2 right-2 px-2.5 py-1 bg-black/85 text-[#00E5FF] text-[10px] md:text-xs rounded-lg flex items-center gap-1.5 opacity-90 group-hover:opacity-100 transition-opacity font-bold border border-cyan-400/40 shadow-md">
                   <ZoomIn className="h-3 w-3" /> Ampliar (Z)
                 </div>
               </div>
@@ -836,18 +837,18 @@ export function TvPlayer({ quiz, onExit }: TvPlayerProps) {
                 return (
                   <div
                     key={alt.letter}
-                    className={`flex items-center px-3.5 py-2 sm:px-4 sm:py-2.5 rounded-full md:rounded-2xl transition-all duration-200 text-left ${cardStyles} ${entranceAnimClasses}`}
+                    className={`flex items-center px-4 py-2.5 sm:px-5 sm:py-3 rounded-full md:rounded-2xl transition-all duration-200 text-left ${cardStyles} ${entranceAnimClasses}`}
                   >
-                    {/* Letter badge: circular badge matching brand structure */}
+                    {/* Letter badge: circular badge with electric cyan styling */}
                     <div
-                      className={`w-7 h-7 sm:w-8 sm:h-8 rounded-full flex items-center justify-center font-black text-xs sm:text-sm shrink-0 mr-3 shadow-xs ${badgeStyle}`}
+                      className={`w-8 h-8 sm:w-9 sm:h-9 rounded-full flex items-center justify-center font-black text-xs sm:text-sm shrink-0 mr-3 shadow-md ${badgeStyle}`}
                     >
                       {alt.letter.toLowerCase()}
                     </div>
 
                     {/* Alternative text */}
                     <div className="flex-1 pr-1">
-                      <span className={`leading-snug block font-medium line-clamp-3 ${
+                      <span className={`leading-snug block font-semibold line-clamp-3 ${
                         isLargeFont ? 'text-xs sm:text-sm md:text-base' : 'text-xs sm:text-sm md:text-[14px]'
                       }`}>
                         {alt.text}
@@ -856,7 +857,7 @@ export function TvPlayer({ quiz, onExit }: TvPlayerProps) {
 
                     {/* Stamp when revealed */}
                     {isRevealed && alt.isCorrect && (
-                      <span className="ml-2 px-3 py-1 text-[11px] sm:text-xs font-black rounded-full bg-white text-emerald-800 shrink-0 shadow-md ring-2 ring-emerald-300 animate-in zoom-in-75 duration-300 flex items-center gap-1">
+                      <span className="ml-2 px-3.5 py-1 text-[11px] sm:text-xs font-black rounded-full bg-white text-emerald-900 shrink-0 shadow-lg ring-2 ring-emerald-300 animate-in zoom-in-75 duration-300 flex items-center gap-1">
                         <Sparkles className="h-3.5 w-3.5 text-emerald-600" />
                         CORRETA
                       </span>
@@ -872,25 +873,23 @@ export function TvPlayer({ quiz, onExit }: TvPlayerProps) {
 
       {/* BOTTOM HOST CONTROL DOCK */}
       <footer
-        className={`relative z-30 px-4 sm:px-6 py-2 border-t backdrop-blur-md shrink-0 transition-colors ${
-          isLightMode
-            ? 'bg-white/95 border-slate-200 text-slate-800'
-            : 'bg-slate-950/90 border-slate-800 text-slate-200'
-        }`}
+        className="relative z-30 px-4 sm:px-6 md:px-8 lg:px-12 py-2.5 border-t border-cyan-500/30 bg-[#06142e]/95 backdrop-blur-md shrink-0 text-slate-200 shadow-xl"
       >
-        <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-3">
-          {/* BOTTOM LEFT CORNER: LOGO + Host Aids */}
+        <div className="max-w-[1850px] mx-auto flex flex-wrap items-center justify-between gap-3">
+          {/* BOTTOM LEFT CORNER: LOGO + Host Controls */}
           <div className="flex items-center gap-3">
-            {/* LOGO IN BOTTOM-LEFT CORNER AS REQUESTED */}
-            <div className="flex items-center pl-1 pr-3 border-r border-slate-200 dark:border-slate-800 shrink-0">
-              <img
-                src={isLightMode ? "/logo-blue.png" : "/logo-white.png"}
-                alt="Logo"
-                className="h-7 sm:h-8 w-auto max-w-[150px] object-contain"
-                onError={(e) => {
-                  (e.target as HTMLImageElement).src = "/logo.png";
-                }}
-              />
+            {/* Favoo Institutional Logo - Crisp, Large and Well-sized */}
+            <div className="flex items-center pl-1 pr-3 border-r border-indigo-500/40 shrink-0">
+              <div className="bg-white/95 px-3 py-1 rounded-xl shadow-md border border-cyan-400/40 flex items-center justify-center">
+                <img
+                  src="/logo-cropped.png"
+                  alt="Favoo"
+                  className="h-8 sm:h-9 md:h-10 w-auto max-w-[160px] object-contain"
+                  onError={(e) => {
+                    (e.target as HTMLImageElement).src = "/logo.png";
+                  }}
+                />
+              </div>
             </div>
 
             {/* Iniciar Tempo / Pular Animação (quando em andamento) */}
@@ -900,7 +899,7 @@ export function TvPlayer({ quiz, onExit }: TvPlayerProps) {
                   variant="default"
                   size="sm"
                   onClick={finishEntrance}
-                  className="h-8 text-xs font-bold gap-1 bg-[#3702B3] hover:bg-[#2c0191] text-white shadow-xs animate-pulse"
+                  className="h-8 text-xs font-bold gap-1 bg-[#00E5FF] hover:bg-cyan-300 text-slate-950 shadow-xs animate-pulse"
                   title="Pular animação e iniciar contagem de tempo agora (Enter)"
                 >
                   <Play className="h-3 w-3 fill-current" />
@@ -912,7 +911,7 @@ export function TvPlayer({ quiz, onExit }: TvPlayerProps) {
                     variant="outline"
                     size="sm"
                     onClick={advanceStep}
-                    className="h-8 text-xs font-semibold gap-1 border-[#3702B3]/40 text-[#3702B3] hover:bg-[#3702B3]/5"
+                    className="h-8 text-xs font-semibold gap-1 border-cyan-400/40 text-cyan-300 hover:bg-cyan-950/40"
                     title="Avançar para a próxima alternativa (Espaço)"
                   >
                     <ArrowRightCircle className="h-3 w-3" />
@@ -922,32 +921,33 @@ export function TvPlayer({ quiz, onExit }: TvPlayerProps) {
               </div>
             ) : null}
 
+            {/* Pause / Resume Button */}
             <Button
               variant="outline"
               size="sm"
               onClick={() => setIsPaused(prev => !prev)}
               disabled={!isEntranceFinished}
-              className="h-8 text-xs font-medium gap-1"
+              className="h-8 text-xs font-bold gap-1.5 border-cyan-500/40 bg-slate-900 text-cyan-300 hover:bg-cyan-950 hover:text-white shadow-xs"
               title="Pausar / Retomar tempo (Espaço)"
             >
-              {isPaused ? <Play className="h-3 w-3 text-emerald-600" /> : <Pause className="h-3 w-3 text-amber-500" />}
-              <span>{isPaused ? 'Continuar' : 'Pausar'}</span>
+              {isPaused ? <Play className="h-3.5 w-3.5 text-[#00E5FF]" /> : <Pause className="h-3.5 w-3.5 text-amber-400" />}
+              <span>{isPaused ? 'Continuar (Espaço)' : 'Pausar (Espaço)'}</span>
             </Button>
 
             <Button
               variant="ghost"
               size="sm"
               onClick={() => resetQuestionState(currentIndex)}
-              className="h-8 text-xs text-muted-foreground hover:text-foreground"
-              title="Reiniciar efeito e tempo desta questão"
+              className="h-8 text-xs text-slate-300 hover:text-[#00E5FF] hover:bg-cyan-950/40"
+              title="Reiniciar tempo desta questão"
             >
               <RotateCcw className="h-3 w-3 mr-1" /> Reiniciar
             </Button>
 
             {/* Quick Effect Switcher for Host */}
-            <div className="hidden lg:flex items-center gap-1.5 pl-2 border-l border-slate-200 dark:border-slate-800">
-              <span className="text-[11px] text-muted-foreground font-semibold flex items-center gap-1">
-                <Zap className="h-3 w-3 text-[#3702B3]" /> Efeito:
+            <div className="hidden lg:flex items-center gap-1.5 pl-2 border-l border-indigo-500/40">
+              <span className="text-[11px] text-cyan-200/70 font-semibold flex items-center gap-1">
+                <Zap className="h-3 w-3 text-[#00E5FF]" /> Efeito:
               </span>
               <select
                 value={activeEffect}
@@ -956,7 +956,7 @@ export function TvPlayer({ quiz, onExit }: TvPlayerProps) {
                   setActiveEffect(newEff);
                   resetQuestionState(currentIndex);
                 }}
-                className="h-7 text-xs rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-2 font-medium text-slate-800 dark:text-slate-200 focus:outline-none cursor-pointer"
+                className="h-7 text-xs rounded-lg border border-cyan-500/40 bg-slate-900 px-2 font-medium text-cyan-200 focus:outline-none cursor-pointer"
                 title="Mudar efeito de entrada da apresentação"
               >
                 <option value="normal">1. Normal (Direto)</option>
@@ -967,13 +967,13 @@ export function TvPlayer({ quiz, onExit }: TvPlayerProps) {
           </div>
 
           {/* Reveal & Next Right */}
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 sm:gap-3">
             <Button
               variant="outline"
               size="sm"
               onClick={handlePrev}
               disabled={currentIndex === 0}
-              className="h-8 text-xs gap-1"
+              className="h-8 text-xs gap-1 border-slate-700 bg-slate-900 text-slate-300 hover:text-white"
               title="Questão anterior (Seta Esquerda)"
             >
               <ChevronLeft className="h-3.5 w-3.5" /> Anterior
@@ -983,19 +983,19 @@ export function TvPlayer({ quiz, onExit }: TvPlayerProps) {
               <Button
                 size="sm"
                 onClick={() => handleReveal(false)}
-                className="h-8 text-xs font-semibold gap-1 px-4 shadow-xs bg-[#3702B3] hover:bg-[#2c0191] text-white"
+                className="h-8 text-xs font-black gap-1.5 px-5 shadow-[0_0_15px_rgba(245,158,11,0.5)] bg-gradient-to-r from-amber-500 to-yellow-400 hover:from-amber-400 hover:to-yellow-300 text-slate-950"
                 title="Revelar resposta antes do tempo acabar (Tecla R ou Enter)"
               >
-                <Sparkles className="h-3.5 w-3.5" /> Revelar Resposta
+                <Sparkles className="h-3.5 w-3.5 text-slate-950" /> Revelar Resposta
               </Button>
             ) : (
               <Button
                 size="sm"
                 onClick={handleNext}
-                className="h-8 text-xs font-semibold gap-1 px-5 shadow-xs bg-[#3702B3] hover:bg-[#2c0191] text-white"
+                className="h-8 text-xs font-black gap-1.5 px-6 shadow-[0_0_18px_rgba(0,229,255,0.6)] bg-gradient-to-r from-[#00E5FF] to-cyan-400 hover:from-cyan-300 hover:to-cyan-200 text-slate-950"
                 title="Avançar para a próxima (Tecla N ou Seta Direita)"
               >
-                <span>{currentIndex === totalQuestions - 1 ? 'Finalizar' : 'Próxima Questão'}</span>
+                <span>{currentIndex === totalQuestions - 1 ? 'Finalizar Simulado' : 'Próxima Questão'}</span>
                 <ChevronRight className="h-3.5 w-3.5" />
               </Button>
             )}
@@ -1003,8 +1003,8 @@ export function TvPlayer({ quiz, onExit }: TvPlayerProps) {
         </div>
 
         {/* Hotkey Helper Bar */}
-        <div className="text-center text-[9px] sm:text-[10px] text-muted-foreground pt-0.5 hidden md:block">
-          Atalhos na TV: <span className="text-foreground font-medium">[Espaço] Pausar / Avançar</span> • <span className="text-foreground font-medium">[R / Enter] Revelar</span> • <span className="text-foreground font-medium">[N / Seta Dir] Próxima</span> • <span className="text-foreground font-medium">[Z] Ampliar Imagem</span>
+        <div className="text-center text-[9px] sm:text-[10px] text-cyan-200/60 pt-1 hidden md:block">
+          Atalhos na TV: <span className="text-white font-medium">[Espaço] Pausar / Avançar</span> • <span className="text-white font-medium">[R / Enter] Revelar</span> • <span className="text-white font-medium">[N / Seta Dir] Próxima</span> • <span className="text-white font-medium">[Z] Ampliar Imagem</span>
         </div>
       </footer>
 

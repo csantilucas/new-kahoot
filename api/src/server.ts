@@ -57,6 +57,11 @@ async function initDatabase() {
           soundEffects: AULAO_ENEM_QUIZ.soundEffects,
           autoReveal: AULAO_ENEM_QUIZ.autoReveal,
           showExplanation: AULAO_ENEM_QUIZ.showExplanation,
+          customMusicUrl: AULAO_ENEM_QUIZ.customMusicUrl,
+          correctSoundUrl: AULAO_ENEM_QUIZ.correctSoundUrl,
+          timeUpSoundUrl: AULAO_ENEM_QUIZ.timeUpSoundUrl,
+          countdownSoundUrl: AULAO_ENEM_QUIZ.countdownSoundUrl,
+          confettiSoundUrl: AULAO_ENEM_QUIZ.confettiSoundUrl,
           isPublished: true,
           questions: {
             create: AULAO_ENEM_QUIZ.questions.map((q) => ({

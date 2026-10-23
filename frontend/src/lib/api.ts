@@ -34,6 +34,10 @@ export interface Quiz {
   autoReveal: boolean;
   showExplanation: boolean;
   customMusicUrl?: string | null;
+  correctSoundUrl?: string | null;
+  timeUpSoundUrl?: string | null;
+  countdownSoundUrl?: string | null;
+  confettiSoundUrl?: string | null;
   isPublished: boolean;
   createdAt?: string;
   updatedAt?: string;

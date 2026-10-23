@@ -51,6 +51,7 @@ export function getYoutubeVideoId(value: string): string | null {
 
 function emitYoutubeAudio(detail: {
   action: 'play' | 'stop' | 'volume';
+  channel?: 'bg' | 'sfx' | 'all';
   videoId?: string;
   loop?: boolean;
   volume?: number;
@@ -69,6 +70,7 @@ class SoundManager {
   private bgVolume: number = 0.35;
   private sfxVolume: number = 0.6;
   private currentTrack: string | null = null;
+  private currentCustomUrl: string | null = null;
   private customAudio: HTMLAudioElement | null = null;
   private previewAudioEl: HTMLAudioElement | null = null;
   private previewingYoutube = false;
@@ -277,20 +279,24 @@ class SoundManager {
     return this.isMuted;
   }
 
-  public stopYoutubeAudio() {
-    emitYoutubeAudio({ action: 'stop' });
-    this.previewingYoutube = false;
-    this.youtubeAudioKind = null;
+  public stopYoutubeAudio(channel?: 'bg' | 'sfx' | 'all') {
+    emitYoutubeAudio({ action: 'stop', channel: channel || 'all' });
+    if (!channel || channel === 'all' || channel === 'sfx') {
+      this.previewingYoutube = false;
+      this.youtubeAudioKind = null;
+    }
   }
 
-  private playOneShotAudio(url: string) {
+  public playOneShotAudio(url: string) {
     if (this.isMuted) return;
     const youtubeVideoId = getYoutubeVideoId(url);
     if (youtubeVideoId) {
       this.youtubeAudioKind = 'sfx';
       emitYoutubeAudio({
         action: 'play',
+        channel: 'sfx',
         videoId: youtubeVideoId,
+        loop: false,
         volume: this.sfxVolume,
       });
       return;
@@ -307,6 +313,13 @@ class SoundManager {
 
   // --- BACKGROUND MUSIC ---
 
+  public isBackgroundMusicPlaying(): boolean {
+    if (this.customAudio && !this.customAudio.paused) return true;
+    if (this.youtubeAudioKind === 'bg') return true;
+    if (this.bgInterval !== null) return true;
+    return false;
+  }
+
   public stopBackgroundMusic() {
     if (this.bgInterval) {
       clearInterval(this.bgInterval);
@@ -317,20 +330,35 @@ class SoundManager {
       this.customAudio.currentTime = 0;
       this.customAudio = null;
     }
-    emitYoutubeAudio({ action: 'stop' });
-    this.youtubeAudioKind = null;
+    if (this.youtubeAudioKind === 'bg') {
+      emitYoutubeAudio({ action: 'stop', channel: 'bg' });
+      this.youtubeAudioKind = null;
+    }
     this.currentTrack = null;
+    this.currentCustomUrl = null;
   }
 
   public startBackgroundMusic(type: string = 'suspense', customUrl?: string) {
+    if (type === 'none') {
+      this.stopBackgroundMusic();
+      return;
+    }
+
+    const activeCustomBg = customUrl || this.getActiveAudioUrl('bgMusic');
+
+    // Se a mesma música de fundo já estiver tocando, mantém tocando sem interrupção nem reinício
+    if (
+      this.isBackgroundMusicPlaying() &&
+      this.currentTrack === type &&
+      this.currentCustomUrl === (activeCustomBg || null)
+    ) {
+      return;
+    }
+
     this.initContext();
     this.stopBackgroundMusic();
     this.currentTrack = type;
-
-    if (type === 'none') return;
-
-    // 1. Direct customUrl from quiz, or active registered custom background music
-    const activeCustomBg = customUrl || this.getActiveAudioUrl('bgMusic');
+    this.currentCustomUrl = activeCustomBg || null;
 
     if (activeCustomBg && activeCustomBg.trim().length > 0) {
       const youtubeVideoId = getYoutubeVideoId(activeCustomBg);
@@ -338,6 +366,7 @@ class SoundManager {
         this.youtubeAudioKind = 'bg';
         emitYoutubeAudio({
           action: 'play',
+          channel: 'bg',
           videoId: youtubeVideoId,
           loop: true,
           volume: this.isMuted ? 0 : this.bgVolume,
@@ -581,8 +610,8 @@ class SoundManager {
     osc.stop(t + 0.09);
   }
 
-  public playCountdownSound() {
-    const custom = this.getActiveAudioUrl('countdown');
+  public playCountdownSound(customUrl?: string) {
+    const custom = customUrl || this.getActiveAudioUrl('countdown');
     if (custom) {
       this.playOneShotAudio(custom);
       return;
@@ -592,8 +621,8 @@ class SoundManager {
   }
 
   // SFX: Time Up Buzzer
-  public playTimeUpBuzzer() {
-    const custom = this.getActiveAudioUrl('timeUp');
+  public playTimeUpBuzzer(customUrl?: string) {
+    const custom = customUrl || this.getActiveAudioUrl('timeUp');
     if (custom) {
       this.playOneShotAudio(custom);
       return;
@@ -620,8 +649,8 @@ class SoundManager {
   }
 
   // SFX: Correct Answer Fanfare / Chime
-  public playCorrectAnswer() {
-    const custom = this.getActiveAudioUrl('correct');
+  public playCorrectAnswer(customUrl?: string) {
+    const custom = customUrl || this.getActiveAudioUrl('correct');
     if (custom) {
       this.playOneShotAudio(custom);
       return;
@@ -648,6 +677,17 @@ class SoundManager {
       osc.start(t + idx * 0.1);
       osc.stop(t + idx * 0.1 + 1.0);
     });
+  }
+
+  // SFX: Confetti Celebration / Time Up Celebration
+  public playConfettiSound(customUrl?: string) {
+    const custom = customUrl || this.getActiveAudioUrl('confetti' as any) || this.getActiveAudioUrl('timeUp');
+    if (custom) {
+      this.playOneShotAudio(custom);
+      return;
+    }
+
+    this.playCorrectAnswer();
   }
 
   // SFX: Wrong Answer Buzzer

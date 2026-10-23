@@ -29,6 +29,10 @@ model Quiz {
   autoReveal         Boolean    @default(false)
   showExplanation    Boolean    @default(true)
   customMusicUrl     String?
+  correctSoundUrl    String?
+  timeUpSoundUrl     String?
+  countdownSoundUrl  String?
+  confettiSoundUrl   String?
   isPublished        Boolean    @default(true)
   createdAt          DateTime   @default(now())
   updatedAt          DateTime   @updatedAt

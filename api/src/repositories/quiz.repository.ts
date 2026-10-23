@@ -13,6 +13,10 @@ export interface CreateQuizInput {
   autoReveal?: boolean;
   showExplanation?: boolean;
   customMusicUrl?: string;
+  correctSoundUrl?: string;
+  timeUpSoundUrl?: string;
+  countdownSoundUrl?: string;
+  confettiSoundUrl?: string;
   isPublished?: boolean;
 }
 
@@ -60,6 +64,10 @@ export class QuizRepository {
         autoReveal: data.autoReveal ?? false,
         showExplanation: data.showExplanation ?? true,
         customMusicUrl: data.customMusicUrl,
+        correctSoundUrl: data.correctSoundUrl,
+        timeUpSoundUrl: data.timeUpSoundUrl,
+        countdownSoundUrl: data.countdownSoundUrl,
+        confettiSoundUrl: data.confettiSoundUrl,
         isPublished: data.isPublished ?? true,
       },
     });
@@ -104,6 +112,10 @@ export class QuizRepository {
         autoReveal: original.autoReveal,
         showExplanation: original.showExplanation,
         customMusicUrl: original.customMusicUrl,
+        correctSoundUrl: original.correctSoundUrl,
+        timeUpSoundUrl: original.timeUpSoundUrl,
+        countdownSoundUrl: original.countdownSoundUrl,
+        confettiSoundUrl: original.confettiSoundUrl,
         isPublished: original.isPublished,
         questions: {
           create: original.questions.map((q) => ({

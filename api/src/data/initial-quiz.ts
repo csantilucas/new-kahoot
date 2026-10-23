@@ -24,6 +24,11 @@ export interface InitialQuizData {
   soundEffects: boolean;
   autoReveal: boolean;
   showExplanation: boolean;
+  customMusicUrl?: string;
+  correctSoundUrl?: string;
+  timeUpSoundUrl?: string;
+  countdownSoundUrl?: string;
+  confettiSoundUrl?: string;
   questions: InitialQuestion[];
 }
 
@@ -33,10 +38,15 @@ export const AULAO_ENEM_QUIZ: InitialQuizData = {
   category: 'ENEM',
   secondsPerQuestion: 60,
   warningSeconds: 8,
-  bgMusic: 'ticking',
+  bgMusic: 'custom',
   soundEffects: true,
   autoReveal: true,
   showExplanation: true,
+  customMusicUrl: 'https://www.youtube.com/watch?v=wbFxNbLWaRo',
+  correctSoundUrl: 'https://www.youtube.com/watch?v=HvPajEdundA',
+  timeUpSoundUrl: 'https://www.youtube.com/watch?v=nfLftXz_37g',
+  countdownSoundUrl: 'https://www.youtube.com/watch?v=saFHtWkxNMw',
+  confettiSoundUrl: 'https://www.youtube.com/watch?v=nfLftXz_37g',
   questions: [
     {
       order: 1,

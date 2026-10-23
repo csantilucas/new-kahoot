@@ -228,3 +228,24 @@
     animation-duration: 1ms !important;
   }
 }
+
+/* TV Player Custom Scrollbar */
+.custom-tv-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(0, 229, 255, 0.35) rgba(6, 20, 46, 0.4);
+}
+.custom-tv-scrollbar::-webkit-scrollbar {
+  width: 6px;
+}
+.custom-tv-scrollbar::-webkit-scrollbar-track {
+  background: rgba(6, 20, 46, 0.4);
+  border-radius: 9999px;
+}
+.custom-tv-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(0, 229, 255, 0.35);
+  border-radius: 9999px;
+}
+.custom-tv-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 229, 255, 0.7);
+}
+
