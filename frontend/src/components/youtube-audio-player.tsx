@@ -1,11 +1,10 @@
 "use client";
 
 import { useEffect, useRef, useState } from 'react';
-import { X } from 'lucide-react';
-import { soundManager, YOUTUBE_AUDIO_EVENT } from '@/lib/sound';
+import { YOUTUBE_AUDIO_EVENT } from '@/lib/sound';
 
 interface YoutubeAudioRequest {
-  action: 'play' | 'stop' | 'volume';
+  action: 'play' | 'stop' | 'volume' | 'pause' | 'resume';
   channel?: 'bg' | 'sfx' | 'all';
   videoId?: string;
   loop?: boolean;
@@ -16,6 +15,8 @@ interface YoutubePlayback {
   videoId: string;
   loop: boolean;
   volume: number;
+  playId: number;
+  isPaused?: boolean;
 }
 
 export function YoutubeAudioPlayer() {
@@ -35,7 +36,7 @@ export function YoutubeAudioPlayer() {
           if (channel === 'bg' || channel === 'all') {
             try {
               bgPlayerRef.current?.contentWindow?.postMessage(
-                JSON.stringify({ event: 'command', func: 'stopVideo', args: [] }),
+                JSON.stringify({ event: 'command', func: 'stopVideo', args: '' }),
                 '*'
               );
             } catch {}
@@ -44,7 +45,7 @@ export function YoutubeAudioPlayer() {
           if (channel === 'sfx' || channel === 'all') {
             try {
               sfxPlayerRef.current?.contentWindow?.postMessage(
-                JSON.stringify({ event: 'command', func: 'stopVideo', args: [] }),
+                JSON.stringify({ event: 'command', func: 'stopVideo', args: '' }),
                 '*'
               );
             } catch {}
@@ -53,12 +54,100 @@ export function YoutubeAudioPlayer() {
           return;
         }
 
+        if (request.action === 'pause') {
+          if (channel === 'bg' || channel === 'all') {
+            const sendPause = () => {
+              try {
+                bgPlayerRef.current?.contentWindow?.postMessage(
+                  JSON.stringify({ event: 'command', func: 'mute', args: '' }),
+                  '*'
+                );
+                bgPlayerRef.current?.contentWindow?.postMessage(
+                  JSON.stringify({ event: 'command', func: 'setVolume', args: [0] }),
+                  '*'
+                );
+                bgPlayerRef.current?.contentWindow?.postMessage(
+                  JSON.stringify({ event: 'command', func: 'pauseVideo', args: '' }),
+                  '*'
+                );
+              } catch {}
+            };
+            sendPause();
+            setTimeout(sendPause, 150);
+            setBgPlayback((curr) => curr && { ...curr, isPaused: true, volume: 0 });
+          }
+          return;
+        }
+
+        if (request.action === 'resume') {
+          if (channel === 'bg' || channel === 'all') {
+            const targetVol = request.volume ?? 0.35;
+            const sendResume = () => {
+              try {
+                bgPlayerRef.current?.contentWindow?.postMessage(
+                  JSON.stringify({ event: 'command', func: 'unMute', args: '' }),
+                  '*'
+                );
+                bgPlayerRef.current?.contentWindow?.postMessage(
+                  JSON.stringify({ event: 'command', func: 'setVolume', args: [Math.round(targetVol * 100)] }),
+                  '*'
+                );
+                bgPlayerRef.current?.contentWindow?.postMessage(
+                  JSON.stringify({ event: 'command', func: 'playVideo', args: '' }),
+                  '*'
+                );
+              } catch {}
+            };
+            sendResume();
+            setTimeout(sendResume, 150);
+            setBgPlayback((curr) => curr && { ...curr, isPaused: false, volume: targetVol });
+          }
+          return;
+        }
+
         if (request.action === 'volume') {
           if (channel === 'bg' || channel === 'all') {
-            setBgPlayback((curr) => curr && { ...curr, volume: request.volume ?? curr.volume });
+            const targetVol = request.volume ?? 0;
+            const sendVol = () => {
+              try {
+                if (targetVol === 0) {
+                  bgPlayerRef.current?.contentWindow?.postMessage(
+                    JSON.stringify({ event: 'command', func: 'mute', args: '' }),
+                    '*'
+                  );
+                  bgPlayerRef.current?.contentWindow?.postMessage(
+                    JSON.stringify({ event: 'command', func: 'pauseVideo', args: '' }),
+                    '*'
+                  );
+                } else {
+                  bgPlayerRef.current?.contentWindow?.postMessage(
+                    JSON.stringify({ event: 'command', func: 'unMute', args: '' }),
+                    '*'
+                  );
+                  bgPlayerRef.current?.contentWindow?.postMessage(
+                    JSON.stringify({ event: 'command', func: 'playVideo', args: '' }),
+                    '*'
+                  );
+                }
+                bgPlayerRef.current?.contentWindow?.postMessage(
+                  JSON.stringify({ event: 'command', func: 'setVolume', args: [Math.round(targetVol * 100)] }),
+                  '*'
+                );
+              } catch {}
+            };
+            sendVol();
+            setTimeout(sendVol, 150);
+            setBgPlayback((curr) => curr && { ...curr, volume: targetVol, isPaused: targetVol === 0 });
           }
           if (channel === 'sfx' || channel === 'all') {
-            setSfxPlayback((curr) => curr && { ...curr, volume: request.volume ?? curr.volume });
+            const sfxVol = request.volume ?? 0.7;
+            try {
+              sfxPlayerRef.current?.contentWindow?.postMessage(
+                JSON.stringify({ event: 'command', func: 'setVolume', args: [Math.round(sfxVol * 100)] }),
+                '*'
+              );
+            } catch {}
+            setSfxPlayback((curr) => curr && { ...curr, volume: sfxVol });
           }
           return;
         }
@@ -70,12 +159,15 @@ export function YoutubeAudioPlayer() {
             videoId: request.videoId,
             loop: true,
             volume: request.volume ?? 0.35,
+            playId: Date.now(),
+            isPaused: false,
           });
         } else {
           setSfxPlayback({
             videoId: request.videoId,
             loop: Boolean(request.loop),
             volume: request.volume ?? 0.7,
+            playId: Date.now(),
           });
         }
       }, 0);
@@ -85,7 +177,7 @@ export function YoutubeAudioPlayer() {
     return () => window.removeEventListener(YOUTUBE_AUDIO_EVENT, handleYoutubeAudio);
   }, []);
 
-  // Sync BG volume
+  // Sync BG volume when volume changes
   useEffect(() => {
     if (!bgPlayback) return;
     const sendVolume = () => {
@@ -94,9 +186,11 @@ export function YoutubeAudioPlayer() {
       if (!cw) return;
 
       if (vol === 0) {
-        cw.postMessage(JSON.stringify({ event: 'command', func: 'mute', args: [] }), '*');
+        cw.postMessage(JSON.stringify({ event: 'command', func: 'mute', args: '' }), '*');
+        cw.postMessage(JSON.stringify({ event: 'command', func: 'pauseVideo', args: '' }), '*');
       } else {
-        cw.postMessage(JSON.stringify({ event: 'command', func: 'unMute', args: [] }), '*');
+        cw.postMessage(JSON.stringify({ event: 'command', func: 'unMute', args: '' }), '*');
+        cw.postMessage(JSON.stringify({ event: 'command', func: 'playVideo', args: '' }), '*');
       }
       cw.postMessage(JSON.stringify({ event: 'command', func: 'setVolume', args: [vol] }), '*');
     };
@@ -106,7 +200,7 @@ export function YoutubeAudioPlayer() {
     return () => window.clearTimeout(timer);
   }, [bgPlayback?.volume]);
 
-  // Sync SFX volume
+  // Sync SFX volume when volume changes
   useEffect(() => {
     if (!sfxPlayback) return;
     const sendVolume = () => {
@@ -115,9 +209,9 @@ export function YoutubeAudioPlayer() {
       if (!cw) return;
 
       if (vol === 0) {
-        cw.postMessage(JSON.stringify({ event: 'command', func: 'mute', args: [] }), '*');
+        cw.postMessage(JSON.stringify({ event: 'command', func: 'mute', args: '' }), '*');
       } else {
-        cw.postMessage(JSON.stringify({ event: 'command', func: 'unMute', args: [] }), '*');
+        cw.postMessage(JSON.stringify({ event: 'command', func: 'unMute', args: '' }), '*');
       }
       cw.postMessage(JSON.stringify({ event: 'command', func: 'setVolume', args: [vol] }), '*');
     };
@@ -133,7 +227,6 @@ export function YoutubeAudioPlayer() {
     playsinline: '1',
     loop: '1',
     enablejsapi: '1',
-    origin: typeof window !== 'undefined' ? window.location.origin : '',
     playlist: bgPlayback.videoId,
   }) : null;
 
@@ -143,7 +236,6 @@ export function YoutubeAudioPlayer() {
     playsinline: '1',
     loop: sfxPlayback.loop ? '1' : '0',
     enablejsapi: '1',
-    origin: typeof window !== 'undefined' ? window.location.origin : '',
     ...(sfxPlayback.loop ? { playlist: sfxPlayback.videoId } : {}),
   }) : null;
 
@@ -155,22 +247,20 @@ export function YoutubeAudioPlayer() {
         <iframe
           key={`bg-${bgPlayback.videoId}`}
           ref={bgPlayerRef}
-          src={`https://www.youtube-nocookie.com/embed/${bgPlayback.videoId}?${bgParams?.toString()}`}
+          src={`https://www.youtube.com/embed/${bgPlayback.videoId}?${bgParams?.toString()}`}
           title="Background Music Player"
           className="w-1 h-1"
           allow="autoplay; encrypted-media"
-          referrerPolicy="strict-origin-when-cross-origin"
         />
       )}
       {sfxPlayback && (
         <iframe
-          key={`sfx-${sfxPlayback.videoId}`}
+          key={`sfx-${sfxPlayback.videoId}-${sfxPlayback.playId}`}
           ref={sfxPlayerRef}
-          src={`https://www.youtube-nocookie.com/embed/${sfxPlayback.videoId}?${sfxParams?.toString()}`}
+          src={`https://www.youtube.com/embed/${sfxPlayback.videoId}?${sfxParams?.toString()}`}
           title="SFX Sound Player"
           className="w-1 h-1"
           allow="autoplay; encrypted-media"
-          referrerPolicy="strict-origin-when-cross-origin"
         />
       )}
     </div>

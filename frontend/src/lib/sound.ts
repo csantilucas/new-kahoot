@@ -50,7 +50,7 @@ export function getYoutubeVideoId(value: string): string | null {
 }
 
 function emitYoutubeAudio(detail: {
-  action: 'play' | 'stop' | 'volume';
+  action: 'play' | 'stop' | 'volume' | 'pause' | 'resume';
   channel?: 'bg' | 'sfx' | 'all';
   videoId?: string;
   loop?: boolean;
@@ -76,7 +76,8 @@ class SoundManager {
   private customAudio: HTMLAudioElement | null = null;
   private previewAudioEl: HTMLAudioElement | null = null;
   private previewingYoutube = false;
-  private youtubeAudioKind: 'bg' | 'sfx' | 'preview' | null = null;
+  private isYoutubeBgActive: boolean = false;
+  private isYoutubeSfxActive: boolean = false;
   private config: CustomAudioConfig | null = null;
 
   constructor() {
@@ -190,9 +191,10 @@ class SoundManager {
     const youtubeVideoId = getYoutubeVideoId(url);
     if (youtubeVideoId) {
       this.previewingYoutube = true;
-      this.youtubeAudioKind = 'preview';
+      this.isYoutubeSfxActive = true;
       emitYoutubeAudio({
         action: 'play',
+        channel: 'sfx',
         videoId: youtubeVideoId,
         volume: this.sfxVolume,
       });
@@ -214,9 +216,9 @@ class SoundManager {
 
   public stopPreview() {
     if (this.previewingYoutube) {
-      emitYoutubeAudio({ action: 'stop' });
+      emitYoutubeAudio({ action: 'stop', channel: 'sfx' });
       this.previewingYoutube = false;
-      this.youtubeAudioKind = null;
+      this.isYoutubeSfxActive = false;
     }
     if (this.previewAudioEl) {
       this.previewAudioEl.pause();
@@ -256,8 +258,10 @@ class SoundManager {
     }
     if (this.customAudio) {
       this.customAudio.volume = 0;
+      this.customAudio.pause();
     }
-    if (this.youtubeAudioKind === 'bg') {
+    if (this.isYoutubeBgActive) {
+      emitYoutubeAudio({ action: 'pause', channel: 'bg' });
       emitYoutubeAudio({ action: 'volume', channel: 'bg', volume: 0 });
     }
   }
@@ -270,9 +274,11 @@ class SoundManager {
     }
     if (this.customAudio) {
       this.customAudio.volume = effectiveVol;
+      this.customAudio.play().catch(() => {});
     }
-    if (this.youtubeAudioKind === 'bg') {
+    if (this.isYoutubeBgActive) {
       emitYoutubeAudio({ action: 'volume', channel: 'bg', volume: effectiveVol });
+      emitYoutubeAudio({ action: 'resume', channel: 'bg', volume: effectiveVol });
     }
   }
 
@@ -285,7 +291,7 @@ class SoundManager {
     if (this.customAudio) {
       this.customAudio.volume = effectiveVol;
     }
-    if (this.youtubeAudioKind === 'bg') {
+    if (this.isYoutubeBgActive) {
       emitYoutubeAudio({ action: 'volume', channel: 'bg', volume: effectiveVol });
     }
   }
@@ -296,7 +302,7 @@ class SoundManager {
     if (this.sfxGainNode && this.ctx) {
       this.sfxGainNode.gain.setValueAtTime(effectiveVol, this.ctx.currentTime);
     }
-    if (this.youtubeAudioKind === 'sfx' || this.youtubeAudioKind === 'preview') {
+    if (this.isYoutubeSfxActive || this.previewingYoutube) {
       emitYoutubeAudio({ action: 'volume', channel: 'sfx', volume: effectiveVol });
     }
   }
@@ -314,9 +320,12 @@ class SoundManager {
 
   public stopYoutubeAudio(channel?: 'bg' | 'sfx' | 'all') {
     emitYoutubeAudio({ action: 'stop', channel: channel || 'all' });
+    if (!channel || channel === 'all' || channel === 'bg') {
+      this.isYoutubeBgActive = false;
+    }
     if (!channel || channel === 'all' || channel === 'sfx') {
       this.previewingYoutube = false;
-      this.youtubeAudioKind = null;
+      this.isYoutubeSfxActive = false;
     }
   }
 
@@ -341,7 +350,7 @@ class SoundManager {
     if (this.isMuted) return;
     const youtubeVideoId = getYoutubeVideoId(url);
     if (youtubeVideoId) {
-      this.youtubeAudioKind = 'sfx';
+      this.isYoutubeSfxActive = true;
       emitYoutubeAudio({
         action: 'play',
         channel: 'sfx',
@@ -365,7 +374,7 @@ class SoundManager {
 
   public isBackgroundMusicPlaying(): boolean {
     if (this.customAudio && !this.customAudio.paused) return true;
-    if (this.youtubeAudioKind === 'bg') return true;
+    if (this.isYoutubeBgActive) return true;
     if (this.bgInterval !== null) return true;
     return false;
   }
@@ -381,9 +390,9 @@ class SoundManager {
       this.customAudio.currentTime = 0;
       this.customAudio = null;
     }
-    if (this.youtubeAudioKind === 'bg') {
+    if (this.isYoutubeBgActive) {
       emitYoutubeAudio({ action: 'stop', channel: 'bg' });
-      this.youtubeAudioKind = null;
+      this.isYoutubeBgActive = false;
     }
     this.currentTrack = null;
     this.currentCustomUrl = null;
@@ -415,7 +424,7 @@ class SoundManager {
     if (activeCustomBg && activeCustomBg.trim().length > 0) {
       const youtubeVideoId = getYoutubeVideoId(activeCustomBg);
       if (youtubeVideoId) {
-        this.youtubeAudioKind = 'bg';
+        this.isYoutubeBgActive = true;
         emitYoutubeAudio({
           action: 'play',
           channel: 'bg',

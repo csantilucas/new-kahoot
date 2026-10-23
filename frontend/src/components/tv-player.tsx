@@ -88,12 +88,9 @@ export function TvPlayer({ quiz, onExit }: TvPlayerProps) {
   const warningTime = quiz.warningSeconds && quiz.warningSeconds > 0 ? quiz.warningSeconds : 10;
   const isUrgent = timeLeft <= warningTime && timeLeft > 0 && !isRevealed;
 
-  // Trigger celebration confetti
+  // Trigger celebration visual confetti (sem tocar som concorrente para preservar a vinheta da resposta certa)
   const triggerConfetti = useCallback(() => {
     try {
-      if (quiz.soundEffects) {
-        soundManager.playConfettiSound(quiz.confettiSoundUrl || undefined);
-      }
       confetti({
         particleCount: 80,
         spread: 100,
@@ -117,7 +114,7 @@ export function TvPlayer({ quiz, onExit }: TvPlayerProps) {
     } catch (e) {
       console.log('Confetti error:', e);
     }
-  }, [quiz]);
+  }, []);
 
   // Skip / End Intro sequence
   const skipIntro = useCallback(() => {
@@ -276,22 +273,15 @@ export function TvPlayer({ quiz, onExit }: TvPlayerProps) {
     setTimeout(() => setShowRevealFlash(false), 450);
 
     if (quiz.soundEffects) {
-      if (isTimeUp) {
-        soundManager.playTimeUpBuzzer(quiz.timeUpSoundUrl || undefined);
-        setTimeout(() => {
-          soundManager.playCorrectAnswer(quiz.correctSoundUrl || undefined);
-          triggerConfetti();
-        }, 600);
-      } else {
-        soundManager.playRevealSuspense();
-        setTimeout(() => {
-          soundManager.playCorrectAnswer(quiz.correctSoundUrl || undefined);
-          triggerConfetti();
-        }, 350);
-      }
-    } else {
-      triggerConfetti();
+      // Interrompe contagem anterior para tocar a resposta certa de forma limpa e imediata
+      soundManager.stopYoutubeAudio('sfx');
+
+      // Toca a vinheta oficial de CERTA RESPOSTA! (Silvio Santos)
+      soundManager.playCorrectAnswer(quiz.correctSoundUrl || undefined);
     }
+
+    // Dispara a celebração visual com confetes
+    triggerConfetti();
   }, [quiz, triggerConfetti]);
 
   // Countdown timer loop - purely decrements timeLeft every second
@@ -367,7 +357,7 @@ export function TvPlayer({ quiz, onExit }: TvPlayerProps) {
       setIsCompleted(true);
       soundManager.stopBackgroundMusic();
       if (quiz.soundEffects) {
-        soundManager.playCorrectAnswer();
+        soundManager.playCorrectAnswer(quiz.correctSoundUrl || undefined);
         triggerConfetti();
       }
     }
