@@ -80,6 +80,7 @@ export function TvPlayer({ quiz, onExit }: TvPlayerProps) {
   const [showRevealFlash, setShowRevealFlash] = useState(false);
 
   const timerRef = useRef<NodeJS.Timeout | null>(null);
+  const hasTriggeredFinalCountdownRef = useRef(false);
   const currentQuestion = questions[currentIndex];
   const totalQuestions = questions.length;
 
@@ -183,6 +184,10 @@ export function TvPlayer({ quiz, onExit }: TvPlayerProps) {
     setZoomedImage(null);
     setIsEntranceFinished(true);
     setEntranceStep(999);
+    hasTriggeredFinalCountdownRef.current = false;
+
+    // Restaura o volume normal da música de fundo para a nova pergunta
+    soundManager.restoreBackgroundMusic();
 
     if (!skipMusic && quiz.bgMusic && quiz.bgMusic !== 'none') {
       soundManager.startBackgroundMusic(quiz.bgMusic, quiz.customMusicUrl || undefined);
@@ -205,6 +210,7 @@ export function TvPlayer({ quiz, onExit }: TvPlayerProps) {
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
       soundManager.stopBackgroundMusic();
+      soundManager.restoreBackgroundMusic();
     };
   }, []);
 
@@ -300,15 +306,27 @@ export function TvPlayer({ quiz, onExit }: TvPlayerProps) {
         }
 
         const next = prev - 1;
-        if (quiz.soundEffects) {
-          if (next <= 10) {
+        
+        // Quando entra nos 10 segundos da contagem final:
+        if (next <= 10 && !hasTriggeredFinalCountdownRef.current) {
+          hasTriggeredFinalCountdownRef.current = true;
+          // ZERAR o som da música de fundo para a contagem final ter foco total na TV
+          soundManager.zeroBackgroundMusic();
+          if (quiz.soundEffects) {
             soundManager.playCountdownSound(quiz.countdownSoundUrl || undefined);
-          } else if (next <= warningTime) {
-            soundManager.playHeartbeat();
-          } else {
+          }
+        } else if (next > 10) {
+          if (quiz.soundEffects) {
             soundManager.playTickingSound();
           }
+        } else if (!quiz.countdownSoundUrl) {
+          // Se não houver áudio customizado de 10s (ex: YouTube do Silvio Santos),
+          // toca o batimento cardíaco procedural nos segundos finais
+          if (quiz.soundEffects) {
+            soundManager.playHeartbeat();
+          }
         }
+
         return next;
       });
     }, 1000);

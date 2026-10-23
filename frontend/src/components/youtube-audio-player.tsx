@@ -73,34 +73,44 @@ export function YoutubeAudioPlayer() {
   // Sync BG volume
   useEffect(() => {
     if (!bgPlayback) return;
-    const timer = window.setTimeout(() => {
-      bgPlayerRef.current?.contentWindow?.postMessage(
-        JSON.stringify({
-          event: 'command',
-          func: 'setVolume',
-          args: [Math.round(bgPlayback.volume * 100)],
-        }),
-        'https://www.youtube-nocookie.com'
-      );
-    }, 500);
+    const sendVolume = () => {
+      const vol = Math.round(bgPlayback.volume * 100);
+      const cw = bgPlayerRef.current?.contentWindow;
+      if (!cw) return;
+
+      if (vol === 0) {
+        cw.postMessage(JSON.stringify({ event: 'command', func: 'mute', args: [] }), '*');
+      } else {
+        cw.postMessage(JSON.stringify({ event: 'command', func: 'unMute', args: [] }), '*');
+      }
+      cw.postMessage(JSON.stringify({ event: 'command', func: 'setVolume', args: [vol] }), '*');
+    };
+
+    sendVolume();
+    const timer = window.setTimeout(sendVolume, 200);
     return () => window.clearTimeout(timer);
-  }, [bgPlayback]);
+  }, [bgPlayback?.volume]);
 
   // Sync SFX volume
   useEffect(() => {
     if (!sfxPlayback) return;
-    const timer = window.setTimeout(() => {
-      sfxPlayerRef.current?.contentWindow?.postMessage(
-        JSON.stringify({
-          event: 'command',
-          func: 'setVolume',
-          args: [Math.round(sfxPlayback.volume * 100)],
-        }),
-        'https://www.youtube-nocookie.com'
-      );
-    }, 300);
+    const sendVolume = () => {
+      const vol = Math.round(sfxPlayback.volume * 100);
+      const cw = sfxPlayerRef.current?.contentWindow;
+      if (!cw) return;
+
+      if (vol === 0) {
+        cw.postMessage(JSON.stringify({ event: 'command', func: 'mute', args: [] }), '*');
+      } else {
+        cw.postMessage(JSON.stringify({ event: 'command', func: 'unMute', args: [] }), '*');
+      }
+      cw.postMessage(JSON.stringify({ event: 'command', func: 'setVolume', args: [vol] }), '*');
+    };
+
+    sendVolume();
+    const timer = window.setTimeout(sendVolume, 200);
     return () => window.clearTimeout(timer);
-  }, [sfxPlayback]);
+  }, [sfxPlayback?.volume]);
 
   const bgParams = bgPlayback ? new URLSearchParams({
     autoplay: '1',

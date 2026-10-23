@@ -245,26 +245,57 @@ class SoundManager {
     }
   }
 
-  public setBgVolume(vol: number) {
-    this.bgVolume = Math.max(0, Math.min(1, vol));
+  private isBgZeroed: boolean = false;
+
+  public zeroBackgroundMusic() {
+    this.isBgZeroed = true;
     if (this.bgGainNode && this.ctx) {
-      this.bgGainNode.gain.setValueAtTime(this.isMuted ? 0 : this.bgVolume, this.ctx.currentTime);
+      this.bgGainNode.gain.setValueAtTime(0, this.ctx.currentTime);
     }
     if (this.customAudio) {
-      this.customAudio.volume = this.isMuted ? 0 : this.bgVolume;
+      this.customAudio.volume = 0;
     }
     if (this.youtubeAudioKind === 'bg') {
-      emitYoutubeAudio({ action: 'volume', volume: this.isMuted ? 0 : this.bgVolume });
+      emitYoutubeAudio({ action: 'volume', channel: 'bg', volume: 0 });
+    }
+  }
+
+  public restoreBackgroundMusic() {
+    this.isBgZeroed = false;
+    const effectiveVol = this.isMuted ? 0 : this.bgVolume;
+    if (this.bgGainNode && this.ctx) {
+      this.bgGainNode.gain.setValueAtTime(effectiveVol, this.ctx.currentTime);
+    }
+    if (this.customAudio) {
+      this.customAudio.volume = effectiveVol;
+    }
+    if (this.youtubeAudioKind === 'bg') {
+      emitYoutubeAudio({ action: 'volume', channel: 'bg', volume: effectiveVol });
+    }
+  }
+
+  public setBgVolume(vol: number) {
+    this.bgVolume = Math.max(0, Math.min(1, vol));
+    const effectiveVol = (this.isMuted || this.isBgZeroed) ? 0 : this.bgVolume;
+    if (this.bgGainNode && this.ctx) {
+      this.bgGainNode.gain.setValueAtTime(effectiveVol, this.ctx.currentTime);
+    }
+    if (this.customAudio) {
+      this.customAudio.volume = effectiveVol;
+    }
+    if (this.youtubeAudioKind === 'bg') {
+      emitYoutubeAudio({ action: 'volume', channel: 'bg', volume: effectiveVol });
     }
   }
 
   public setSfxVolume(vol: number) {
     this.sfxVolume = Math.max(0, Math.min(1, vol));
+    const effectiveVol = this.isMuted ? 0 : this.sfxVolume;
     if (this.sfxGainNode && this.ctx) {
-      this.sfxGainNode.gain.setValueAtTime(this.isMuted ? 0 : this.sfxVolume, this.ctx.currentTime);
+      this.sfxGainNode.gain.setValueAtTime(effectiveVol, this.ctx.currentTime);
     }
     if (this.youtubeAudioKind === 'sfx' || this.youtubeAudioKind === 'preview') {
-      emitYoutubeAudio({ action: 'volume', volume: this.isMuted ? 0 : this.sfxVolume });
+      emitYoutubeAudio({ action: 'volume', channel: 'sfx', volume: effectiveVol });
     }
   }
 
@@ -321,6 +352,7 @@ class SoundManager {
   }
 
   public stopBackgroundMusic() {
+    this.isBgZeroed = false;
     if (this.bgInterval) {
       clearInterval(this.bgInterval);
       this.bgInterval = null;
@@ -357,6 +389,7 @@ class SoundManager {
 
     this.initContext();
     this.stopBackgroundMusic();
+    this.isBgZeroed = false;
     this.currentTrack = type;
     this.currentCustomUrl = activeCustomBg || null;
 
