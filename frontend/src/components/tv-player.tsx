@@ -276,7 +276,9 @@ export function TvPlayer({ quiz, onExit }: TvPlayerProps) {
 
         const next = prev - 1;
         if (quiz.soundEffects) {
-          if (next <= warningTime) {
+          if (next <= 10) {
+            soundManager.playCountdownSound();
+          } else if (next <= warningTime) {
             soundManager.playHeartbeat();
           } else {
             soundManager.playTickingSound();

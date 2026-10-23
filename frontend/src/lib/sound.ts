@@ -1,12 +1,12 @@
 // Web Audio API procedural synthesizer + Custom Audio Player for Show do Milhão & Interactive TV Quiz
 
-export type AudioCategory = 'bgMusic' | 'correct' | 'wrong' | 'timeUp' | 'ticking' | 'fiftyFifty';
+export type AudioCategory = 'bgMusic' | 'correct' | 'wrong' | 'timeUp' | 'ticking' | 'countdown' | 'fiftyFifty';
 
 export interface CustomAudioItem {
   id: string;
   name: string;
   type: AudioCategory;
-  sourceType: 'file' | 'url';
+  sourceType: 'file' | 'url' | 'youtube';
   url: string; // base64 data URL or external URL
   createdAt: number;
 }
@@ -17,11 +17,48 @@ export interface CustomAudioConfig {
   activeWrongId?: string | null;
   activeTimeUpId?: string | null;
   activeTickingId?: string | null;
+  activeCountdownId?: string | null;
   activeFiftyFiftyId?: string | null;
   items: CustomAudioItem[];
 }
 
 const STORAGE_KEY = 'revisao_custom_audios';
+export const YOUTUBE_AUDIO_EVENT = 'revisao:youtube-audio';
+
+export function getYoutubeVideoId(value: string): string | null {
+  try {
+    const url = new URL(value);
+    if (url.protocol !== 'https:' && url.protocol !== 'http:') return null;
+    const hostname = url.hostname.toLowerCase().replace(/^www\./, '');
+    let videoId: string | null = null;
+
+    if (hostname === 'youtu.be') {
+      videoId = url.pathname.split('/').filter(Boolean)[0] || null;
+    } else if (['youtube.com', 'm.youtube.com', 'music.youtube.com', 'youtube-nocookie.com'].includes(hostname)) {
+      if (url.pathname === '/watch') {
+        videoId = url.searchParams.get('v');
+      } else {
+        const match = url.pathname.match(/^\/(?:embed|shorts|live)\/([^/]+)/);
+        videoId = match?.[1] || null;
+      }
+    }
+
+    return videoId && /^[A-Za-z0-9_-]{11}$/.test(videoId) ? videoId : null;
+  } catch {
+    return null;
+  }
+}
+
+function emitYoutubeAudio(detail: {
+  action: 'play' | 'stop' | 'volume';
+  videoId?: string;
+  loop?: boolean;
+  volume?: number;
+}) {
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent(YOUTUBE_AUDIO_EVENT, { detail }));
+  }
+}
 
 class SoundManager {
   private ctx: AudioContext | null = null;
@@ -34,6 +71,8 @@ class SoundManager {
   private currentTrack: string | null = null;
   private customAudio: HTMLAudioElement | null = null;
   private previewAudioEl: HTMLAudioElement | null = null;
+  private previewingYoutube = false;
+  private youtubeAudioKind: 'bg' | 'sfx' | 'preview' | null = null;
   private config: CustomAudioConfig | null = null;
 
   constructor() {
@@ -128,13 +167,14 @@ class SoundManager {
     return item ? item.url : null;
   }
 
-  private getActiveKey(category: AudioCategory): 'activeBgMusicId' | 'activeCorrectId' | 'activeWrongId' | 'activeTimeUpId' | 'activeTickingId' | 'activeFiftyFiftyId' {
+  private getActiveKey(category: AudioCategory): 'activeBgMusicId' | 'activeCorrectId' | 'activeWrongId' | 'activeTimeUpId' | 'activeTickingId' | 'activeCountdownId' | 'activeFiftyFiftyId' {
     switch (category) {
       case 'bgMusic': return 'activeBgMusicId';
       case 'correct': return 'activeCorrectId';
       case 'wrong': return 'activeWrongId';
       case 'timeUp': return 'activeTimeUpId';
       case 'ticking': return 'activeTickingId';
+      case 'countdown': return 'activeCountdownId';
       case 'fiftyFifty': return 'activeFiftyFiftyId';
     }
   }
@@ -143,6 +183,18 @@ class SoundManager {
 
   public previewAudio(url: string, onEnded?: () => void) {
     this.stopPreview();
+    const youtubeVideoId = getYoutubeVideoId(url);
+    if (youtubeVideoId) {
+      this.previewingYoutube = true;
+      this.youtubeAudioKind = 'preview';
+      emitYoutubeAudio({
+        action: 'play',
+        videoId: youtubeVideoId,
+        volume: this.sfxVolume,
+      });
+      return;
+    }
+
     try {
       this.previewAudioEl = new Audio(url);
       this.previewAudioEl.volume = this.sfxVolume;
@@ -157,6 +209,11 @@ class SoundManager {
   }
 
   public stopPreview() {
+    if (this.previewingYoutube) {
+      emitYoutubeAudio({ action: 'stop' });
+      this.previewingYoutube = false;
+      this.youtubeAudioKind = null;
+    }
     if (this.previewAudioEl) {
       this.previewAudioEl.pause();
       this.previewAudioEl.currentTime = 0;
@@ -194,12 +251,18 @@ class SoundManager {
     if (this.customAudio) {
       this.customAudio.volume = this.isMuted ? 0 : this.bgVolume;
     }
+    if (this.youtubeAudioKind === 'bg') {
+      emitYoutubeAudio({ action: 'volume', volume: this.isMuted ? 0 : this.bgVolume });
+    }
   }
 
   public setSfxVolume(vol: number) {
     this.sfxVolume = Math.max(0, Math.min(1, vol));
     if (this.sfxGainNode && this.ctx) {
       this.sfxGainNode.gain.setValueAtTime(this.isMuted ? 0 : this.sfxVolume, this.ctx.currentTime);
+    }
+    if (this.youtubeAudioKind === 'sfx' || this.youtubeAudioKind === 'preview') {
+      emitYoutubeAudio({ action: 'volume', volume: this.isMuted ? 0 : this.sfxVolume });
     }
   }
 
@@ -214,8 +277,25 @@ class SoundManager {
     return this.isMuted;
   }
 
+  public stopYoutubeAudio() {
+    emitYoutubeAudio({ action: 'stop' });
+    this.previewingYoutube = false;
+    this.youtubeAudioKind = null;
+  }
+
   private playOneShotAudio(url: string) {
     if (this.isMuted) return;
+    const youtubeVideoId = getYoutubeVideoId(url);
+    if (youtubeVideoId) {
+      this.youtubeAudioKind = 'sfx';
+      emitYoutubeAudio({
+        action: 'play',
+        videoId: youtubeVideoId,
+        volume: this.sfxVolume,
+      });
+      return;
+    }
+
     try {
       const audio = new Audio(url);
       audio.volume = this.sfxVolume;
@@ -237,6 +317,8 @@ class SoundManager {
       this.customAudio.currentTime = 0;
       this.customAudio = null;
     }
+    emitYoutubeAudio({ action: 'stop' });
+    this.youtubeAudioKind = null;
     this.currentTrack = null;
   }
 
@@ -251,6 +333,18 @@ class SoundManager {
     const activeCustomBg = customUrl || this.getActiveAudioUrl('bgMusic');
 
     if (activeCustomBg && activeCustomBg.trim().length > 0) {
+      const youtubeVideoId = getYoutubeVideoId(activeCustomBg);
+      if (youtubeVideoId) {
+        this.youtubeAudioKind = 'bg';
+        emitYoutubeAudio({
+          action: 'play',
+          videoId: youtubeVideoId,
+          loop: true,
+          volume: this.isMuted ? 0 : this.bgVolume,
+        });
+        return;
+      }
+
       try {
         this.customAudio = new Audio(activeCustomBg);
         this.customAudio.loop = true;
@@ -485,6 +579,16 @@ class SoundManager {
     gain.connect(this.sfxGainNode);
     osc.start(t);
     osc.stop(t + 0.09);
+  }
+
+  public playCountdownSound() {
+    const custom = this.getActiveAudioUrl('countdown');
+    if (custom) {
+      this.playOneShotAudio(custom);
+      return;
+    }
+
+    this.playHeartbeat();
   }
 
   // SFX: Time Up Buzzer

@@ -4,7 +4,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { soundManager, AudioCategory, CustomAudioItem, CustomAudioConfig } from '@/lib/sound';
+import { soundManager, AudioCategory, CustomAudioItem, CustomAudioConfig, getYoutubeVideoId } from '@/lib/sound';
 import {
   Music,
   CheckCircle2,
@@ -53,7 +53,13 @@ const CATEGORIES: { type: AudioCategory; label: string; icon: any; desc: string 
     type: 'ticking',
     label: 'Tic-tac do Cronômetro',
     icon: Timer,
-    desc: 'Batimento ritmado nos últimos segundos de urgência',
+    desc: 'Som repetido durante a contagem normal do cronômetro',
+  },
+  {
+    type: 'countdown',
+    label: 'Contagem Final (10 segundos)',
+    icon: Timer,
+    desc: 'Som tocado a cada segundo nos 10 segundos finais da questão',
   },
 ];
 
@@ -67,7 +73,7 @@ export function AudioConfigModal({ isOpen, onClose }: AudioConfigModalProps) {
   const [newAudioUrl, setNewAudioUrl] = useState('');
   const [selectedFileName, setSelectedFileName] = useState('');
   const [selectedFileSize, setSelectedFileSize] = useState('');
-  const [audioMode, setAudioMode] = useState<'file' | 'url'>('file');
+  const [audioMode, setAudioMode] = useState<'file' | 'url' | 'youtube'>('file');
   const [fileLoading, setFileLoading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -134,6 +140,15 @@ export function AudioConfigModal({ isOpen, onClose }: AudioConfigModalProps) {
     e.preventDefault();
     if (!newAudioUrl.trim()) {
       alert('Por favor, envie um arquivo ou insira uma URL de áudio.');
+      return;
+    }
+
+    if (audioMode === 'youtube' && !getYoutubeVideoId(newAudioUrl)) {
+      alert('Informe um link válido de vídeo do YouTube.');
+      return;
+    }
+    if (audioMode !== 'youtube' && getYoutubeVideoId(newAudioUrl)) {
+      alert('Selecione a opção YouTube para cadastrar um link de vídeo.');
       return;
     }
 
@@ -207,6 +222,10 @@ export function AudioConfigModal({ isOpen, onClose }: AudioConfigModalProps) {
         soundManager.playTickingSound();
         setTimeout(() => setPreviewingId(null), 500);
         break;
+      case 'countdown':
+        soundManager.playCountdownSound();
+        setTimeout(() => setPreviewingId(null), 500);
+        break;
       case 'fiftyFifty':
         soundManager.playFiftyFifty();
         setTimeout(() => setPreviewingId(null), 700);
@@ -222,7 +241,8 @@ export function AudioConfigModal({ isOpen, onClose }: AudioConfigModalProps) {
     activeCategory === 'correct' ? 'activeCorrectId' :
     activeCategory === 'wrong' ? 'activeWrongId' :
     activeCategory === 'timeUp' ? 'activeTimeUpId' :
-    activeCategory === 'ticking' ? 'activeTickingId' : 'activeFiftyFiftyId'
+    activeCategory === 'ticking' ? 'activeTickingId' :
+    activeCategory === 'countdown' ? 'activeCountdownId' : 'activeFiftyFiftyId'
   ) as keyof CustomAudioConfig;
 
   const currentActiveId = config[activeKey] as string | null | undefined;
@@ -263,6 +283,7 @@ export function AudioConfigModal({ isOpen, onClose }: AudioConfigModalProps) {
                   (cat.type === 'wrong' && config.activeWrongId === i.id) ||
                   (cat.type === 'timeUp' && config.activeTimeUpId === i.id) ||
                   (cat.type === 'ticking' && config.activeTickingId === i.id) ||
+                  (cat.type === 'countdown' && config.activeCountdownId === i.id) ||
                   (cat.type === 'fiftyFifty' && config.activeFiftyFiftyId === i.id)
                 )
               );
@@ -386,7 +407,11 @@ export function AudioConfigModal({ isOpen, onClose }: AudioConfigModalProps) {
                       <div className="min-w-0 truncate">
                         <span className="text-xs font-bold block truncate">{item.name}</span>
                         <span className="text-[10px] text-muted-foreground block truncate">
-                          {item.sourceType === 'file' ? 'Arquivo Local' : 'Link Web'}
+                          {item.sourceType === 'file'
+                            ? 'Arquivo Local'
+                            : item.sourceType === 'youtube'
+                              ? 'Vídeo do YouTube (player oficial)'
+                              : 'Link Web'}
                         </span>
                       </div>
                     </div>
@@ -474,7 +499,18 @@ export function AudioConfigModal({ isOpen, onClose }: AudioConfigModalProps) {
                         : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
                     }`}
                   >
-                    <Link className="h-3 w-3" /> Link Web
+                    <Link className="h-3 w-3" /> Link de Áudio
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setAudioMode('youtube'); }}
+                    className={`px-2.5 py-1 rounded-md text-xs font-semibold transition-all flex items-center gap-1.5 ${
+                      audioMode === 'youtube'
+                        ? 'bg-white dark:bg-slate-900 text-[#3702B3] shadow-xs'
+                        : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
+                    }`}
+                  >
+                    YouTube
                   </button>
                 </div>
               </div>
@@ -553,7 +589,7 @@ export function AudioConfigModal({ isOpen, onClose }: AudioConfigModalProps) {
                       </div>
                     )}
                   </div>
-                ) : (
+                ) : audioMode === 'url' ? (
                   /* URL Link Mode */
                   <div className="space-y-1.5">
                     <div className="flex items-center justify-between">
@@ -578,6 +614,32 @@ export function AudioConfigModal({ isOpen, onClose }: AudioConfigModalProps) {
                       onChange={(e) => setNewAudioUrl(e.target.value)}
                       className="h-9 text-xs bg-white dark:bg-slate-950/60"
                     />
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    <label className="text-xs font-medium text-slate-700 dark:text-slate-300">
+                      Link do vídeo do YouTube
+                    </label>
+                    <Input
+                      type="url"
+                      placeholder="https://www.youtube.com/watch?v=..."
+                      value={newAudioUrl}
+                      onChange={(e) => setNewAudioUrl(e.target.value)}
+                      className="h-9 text-xs bg-white dark:bg-slate-950/60"
+                    />
+                    <p className="text-[11px] text-muted-foreground">
+                      A reprodução usa o player oficial com vídeo e controles visíveis; não extrai o áudio.
+                    </p>
+                    {newAudioUrl && (
+                      <button
+                        type="button"
+                        onClick={() => handleTogglePreview('temp', newAudioUrl)}
+                        className="text-[11px] text-[#3702B3] hover:underline flex items-center gap-1 font-semibold"
+                      >
+                        {previewingId === 'temp' ? <Square className="h-2.5 w-2.5 text-red-500" /> : <Play className="h-2.5 w-2.5" />}
+                        {previewingId === 'temp' ? 'Parar teste' : 'Testar vídeo'}
+                      </button>
+                    )}
                   </div>
                 )}
 

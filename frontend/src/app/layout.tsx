@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist } from "next/font/google";
 import "./globals.css";
 import { cn } from "@/lib/utils";
+import { YoutubeAudioPlayer } from "@/components/youtube-audio-player";
 
 const geist = Geist({
   subsets: ["latin"],
@@ -22,6 +23,7 @@ export default function RootLayout({
     <html lang="pt-BR" className={cn("h-full antialiased font-sans", geist.variable)}>
       <body className="min-h-full bg-background text-foreground flex flex-col">
         {children}
+        <YoutubeAudioPlayer />
       </body>
     </html>
   );
