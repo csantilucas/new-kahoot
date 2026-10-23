@@ -577,23 +577,24 @@ export function TvPlayer({ quiz, onExit }: TvPlayerProps) {
   };
 
   // Auto-calculated statement font size so questions always fit 100% on screen without scrolling or overflow-hidden
+  // Auto-calculated statement font size so questions stretch and fill the screen without scrolling
   const getStatementFontClasses = (text: string) => {
     const len = (text || '').length;
-    if (len < 100) {
-      return 'text-lg sm:text-xl md:text-2xl lg:text-[25px] xl:text-[28px] leading-relaxed font-semibold';
+    if (len < 120) {
+      return 'text-xl sm:text-2xl md:text-3xl lg:text-[28px] xl:text-[32px] 2xl:text-[36px] leading-relaxed font-bold';
     }
-    if (len < 220) {
-      return 'text-base sm:text-lg md:text-xl lg:text-[21px] xl:text-[23px] leading-relaxed font-medium';
+    if (len < 260) {
+      return 'text-lg sm:text-xl md:text-2xl lg:text-[23px] xl:text-[26px] 2xl:text-[29px] leading-relaxed font-semibold';
     }
-    if (len < 400) {
-      return 'text-sm sm:text-base md:text-lg lg:text-[18px] xl:text-[20px] leading-relaxed font-medium';
+    if (len < 450) {
+      return 'text-base sm:text-lg md:text-xl lg:text-[20px] xl:text-[22px] 2xl:text-[24px] leading-relaxed font-medium';
     }
-    return 'text-xs sm:text-sm md:text-base lg:text-[16px] xl:text-[18px] leading-normal font-medium';
+    return 'text-sm sm:text-base md:text-lg lg:text-[17px] xl:text-[19px] 2xl:text-[21px] leading-normal font-medium';
   };
 
-  // Large alternative font size requested for Telão (commanding letters and large badge)
-  const altFontClasses = 'text-base sm:text-lg md:text-xl lg:text-[22px] xl:text-[25px] 2xl:text-[28px] font-bold leading-snug';
-  const altBadgeClasses = 'w-10 h-10 sm:w-11 sm:h-11 md:w-12 md:h-12 lg:w-14 lg:h-14 text-base sm:text-lg md:text-xl lg:text-2xl font-black';
+  // Alternative font size and badge - responsive and prominent
+  const altFontClasses = 'text-base sm:text-lg md:text-xl lg:text-[21px] xl:text-[23px] 2xl:text-[25px] font-bold leading-snug';
+  const altBadgeClasses = 'w-9 h-9 sm:w-10 sm:h-10 md:w-11 md:h-11 lg:w-12 lg:h-12 text-sm sm:text-base md:text-lg lg:text-xl font-black shrink-0 mr-3 sm:mr-3.5';
 
   return (
     <div
@@ -676,9 +677,9 @@ export function TvPlayer({ quiz, onExit }: TvPlayerProps) {
 
       {/* TOP HEADER: ALL-IN-ONE BROADCAST CONTROL BAR */}
       <header
-        className="relative z-20 px-3 sm:px-6 md:px-8 lg:px-10 py-2 sm:py-2.5 border-b border-cyan-500/30 bg-[#06142e]/95 backdrop-blur-md shrink-0 shadow-xl"
+        className="relative z-20 px-2 sm:px-3 md:px-4 py-1.5 sm:py-2 border-b border-cyan-500/30 bg-[#06142e]/95 backdrop-blur-md shrink-0 shadow-xl"
       >
-        <div className="w-full max-w-[1920px] mx-auto flex items-center justify-between gap-2 sm:gap-4 lg:gap-6">
+        <div className="w-full flex items-center justify-between gap-2 sm:gap-4 lg:gap-6">
 
           {/* LEFT: Prominent Show do Milhão TV Logo + Favoo + Quiz Info */}
           <div className="flex items-center gap-2.5 sm:gap-4 shrink-0">
@@ -963,27 +964,27 @@ export function TvPlayer({ quiz, onExit }: TvPlayerProps) {
         </div>
       </header>
 
-      {/* CENTER STAGE: EXACT MATCH TO USER MOCKUPS WITH DIRECTIONAL TRANSITION (PLANO 5) */}
-      <main className="relative z-10 flex-1 min-h-0 px-3 sm:px-6 md:px-8 lg:px-10 py-2 sm:py-2.5 w-full max-w-[1920px] mx-auto flex flex-col justify-center overflow-hidden">
+      {/* CENTER STAGE: FULL-WIDTH BROADCAST STAGE */}
+      <main className="relative z-10 flex-1 min-h-0 px-1 sm:px-2 md:px-3 py-1 sm:py-1.5 w-full max-w-none flex flex-col justify-center overflow-hidden">
         <div
           key={currentIndex}
-          className={`grid grid-cols-1 lg:grid-cols-12 gap-3.5 sm:gap-4 lg:gap-6 xl:gap-8 items-stretch w-full h-full min-h-0 ${navDirection === 'next' ? 'anim-question-next' : 'anim-question-prev'
+          className={`grid grid-cols-1 lg:grid-cols-12 gap-2 sm:gap-2.5 lg:gap-3 xl:gap-4 items-stretch w-full h-full min-h-0 ${navDirection === 'next' ? 'anim-question-next' : 'anim-question-prev'
             }`}
         >
 
-          {/* LEFT COLUMN: LARGE ROUNDED STATEMENT CARD (SHOW DO MILHÃO THEME) */}
+          {/* LEFT COLUMN: LARGE ROUNDED STATEMENT CARD (SHOW DO MILHÃO THEME - WIDE & STRETCHED) */}
           <div className={`${currentQuestion.imageUrl
-              ? 'lg:col-span-6 xl:col-span-7 2xl:col-span-7'
-              : 'lg:col-span-7 xl:col-span-8 2xl:col-span-8'
+              ? 'lg:col-span-7 xl:col-span-8 2xl:col-span-8'
+              : 'lg:col-span-8 xl:col-span-8 2xl:col-span-9'
             } flex flex-col min-h-0 h-full transition-all duration-500 ease-out ${activeEffect === 'step_by_step'
               ? (entranceStep >= 0 ? 'opacity-100 translate-x-0' : 'opacity-0 -translate-x-16')
               : 'opacity-100 translate-x-0'
             }`}>
             <div
-              className="p-4 sm:p-5 md:p-6 lg:p-7 xl:p-8 rounded-[24px] md:rounded-[30px] transition-all flex-1 min-h-0 flex flex-col bg-gradient-to-br from-[#1c0f42] via-[#161245] to-[#0a1532] border-2 border-cyan-400/40 shadow-[0_12px_40px_rgba(0,0,0,0.6),0_0_25px_rgba(0,229,255,0.18)] text-white"
+              className="p-3.5 sm:p-4 md:p-5 lg:p-6 xl:p-7 rounded-[22px] md:rounded-[28px] transition-all flex-1 min-h-0 flex flex-col bg-gradient-to-br from-[#1c0f42] via-[#161245] to-[#0a1532] border-2 border-cyan-400/40 shadow-[0_12px_40px_rgba(0,0,0,0.6),0_0_25px_rgba(0,229,255,0.18)] text-white"
             >
               {/* Question Header Banner matching user's attached reference */}
-              <div className="flex items-center justify-between pb-2.5 mb-2.5 sm:pb-3 sm:mb-3 border-b-2 border-cyan-400/30 shrink-0">
+              <div className="flex items-center justify-between pb-2 mb-2 sm:pb-2.5 sm:mb-2.5 border-b-2 border-cyan-400/30 shrink-0">
                 <div className="flex items-baseline gap-2.5">
                   <span className="text-xs sm:text-sm font-black tracking-[0.25em] text-[#00E5FF] uppercase drop-shadow-[0_0_12px_rgba(0,229,255,0.7)]">
                     QUESTÃO
@@ -1011,10 +1012,10 @@ export function TvPlayer({ quiz, onExit }: TvPlayerProps) {
             </div>
           </div>
 
-          {/* RIGHT COLUMN: IMAGE ON TOP (IF PRESENT) + ALTERNATIVES UNDERNEATH */}
+          {/* RIGHT COLUMN: COMPACT WIDTH ALTERNATIVES (EXPANDS IN HEIGHT WHEN OVERFLOWING) */}
           <div className={`${currentQuestion.imageUrl
-              ? 'lg:col-span-6 xl:col-span-5 2xl:col-span-5'
-              : 'lg:col-span-5 xl:col-span-4 2xl:col-span-4'
+              ? 'lg:col-span-5 xl:col-span-4 2xl:col-span-4'
+              : 'lg:col-span-4 xl:col-span-4 2xl:col-span-3'
             } flex flex-col justify-center gap-2 sm:gap-2.5 min-h-0 h-full`}>
 
             {/* IMAGE CARD (DIRECTLY ON TOP OF ALTERNATIVES AS IN USER MOCKUP) */}
@@ -1035,11 +1036,11 @@ export function TvPlayer({ quiz, onExit }: TvPlayerProps) {
               </div>
             )}
 
-            {/* ALTERNATIVES PILLS (UNDER THE IMAGE) - NO SCROLLBAR, FULL VISIBILITY */}
+            {/* ALTERNATIVES PILLS - COMPACT WIDTH & DYNAMIC EXPANDING HEIGHT */}
             <div className={`flex flex-col justify-center ${
               currentQuestion.imageUrl
                 ? 'gap-2 sm:gap-2.5 xl:gap-3 flex-1 min-h-0'
-                : 'gap-2.5 sm:gap-3 xl:gap-4 flex-1'
+                : 'gap-2 sm:gap-2.5 xl:gap-3 flex-1'
             }`}>
               {currentQuestion.alternatives.map((alt, altIdx) => {
                 const cardStyles = getAlternativeCardStyles(alt);
@@ -1078,10 +1079,10 @@ export function TvPlayer({ quiz, onExit }: TvPlayerProps) {
                     style={{
                       transitionDelay: altTransitionDelay,
                     }}
-                    className={`relative overflow-hidden flex items-center px-4 py-2.5 sm:px-5 sm:py-3.5 xl:py-4 rounded-2xl md:rounded-[22px] transition-all duration-300 text-left ${
+                    className={`relative overflow-hidden flex items-center px-3.5 py-2.5 sm:px-4 sm:py-3 xl:py-3.5 rounded-2xl md:rounded-[20px] transition-all duration-300 text-left ${
                       currentQuestion.imageUrl
-                        ? 'shrink-0 min-h-[50px] sm:min-h-[56px] xl:min-h-[64px]'
-                        : 'flex-1 min-h-[58px] sm:min-h-[66px] xl:min-h-[76px]'
+                        ? 'shrink-0 min-h-[48px] sm:min-h-[54px] xl:min-h-[60px] h-auto'
+                        : 'flex-1 min-h-[56px] sm:min-h-[62px] xl:min-h-[70px] h-auto'
                     } ${cardStyles} ${entranceAnimClasses} ${isRevealed && alt.isCorrect ? 'anim-winner-glow ring-4 ring-emerald-300/80 shadow-[0_0_35px_rgba(16,185,129,0.8)]' : ''
                       }`}
                   >
@@ -1092,22 +1093,22 @@ export function TvPlayer({ quiz, onExit }: TvPlayerProps) {
 
                     {/* Letter badge: circular badge with electric cyan styling */}
                     <div
-                      className={`rounded-full flex items-center justify-center font-black shrink-0 mr-3.5 sm:mr-4 shadow-md ${badgeStyle} ${altBadgeClasses}`}
+                      className={`rounded-full flex items-center justify-center font-black shadow-md ${badgeStyle} ${altBadgeClasses}`}
                     >
                       {alt.letter.toLowerCase()}
                     </div>
 
-                    {/* Alternative text - Large font size */}
-                    <div className="flex-1 min-w-0 pr-1">
-                      <span className={`leading-snug block break-words ${altFontClasses}`}>
+                    {/* Alternative text - wraps cleanly and expands card height when long */}
+                    <div className="flex-1 min-w-0 pr-1 py-0.5">
+                      <span className={`leading-snug block break-words whitespace-normal ${altFontClasses}`}>
                         {alt.text}
                       </span>
                     </div>
 
                     {/* Stamp when revealed */}
                     {isRevealed && alt.isCorrect && (
-                      <span className="ml-2 px-3 py-1.5 text-xs sm:text-sm md:text-base font-black rounded-full bg-white text-emerald-900 shrink-0 shadow-lg ring-2 ring-emerald-300 animate-in zoom-in-75 duration-300 flex items-center gap-1.5">
-                        <Sparkles className="h-4 w-4 text-emerald-600" />
+                      <span className="ml-1.5 sm:ml-2 px-2.5 sm:px-3 py-1 text-xs sm:text-sm font-black rounded-full bg-white text-emerald-900 shrink-0 shadow-lg ring-2 ring-emerald-300 animate-in zoom-in-75 duration-300 flex items-center gap-1">
+                        <Sparkles className="h-3.5 w-3.5 text-emerald-600" />
                         CORRETA
                       </span>
                     )}
